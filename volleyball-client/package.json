@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:demo": "cross-env VITE_DEMO_MODE=true VITE_USE_EMULATOR=true vite",
     "build": "vite build",
+    "deploy": "npm run build && firebase deploy",
     "lint": "eslint .",
     "preview": "vite preview"
   },
