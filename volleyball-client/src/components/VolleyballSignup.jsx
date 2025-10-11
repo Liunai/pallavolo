@@ -161,13 +161,13 @@ export default function VolleyballSignup() {
   const handleSignup = async (asReserve = false) => {
     if (!isLoggedIn || !currentUser) return;
 
-    const friendsList = [];
-    for (let i = 0; i < friendsCount; i++) {
-      friendsList.push(`Amico ${i + 1} di ${currentUser.displayName}`);
-    }
+    const clampedFriendsCount = Math.min(3, Math.max(0, friendsCount || 0));
+    const friendsList = Array.from({ length: clampedFriendsCount }, (_, i) =>
+      `Amico ${i + 1} di ${currentUser.displayName}`
+    );
 
     try {
-      await runTransaction(db, async (transaction) => {
+      const placedAsReserve = await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(currentSessionRef);
         const data = snap.data() || { participants: [], reserves: [] };
         const alreadyParticipant = data.participants?.some((p) => p.uid === currentUser.uid);
@@ -188,31 +188,46 @@ export default function VolleyballSignup() {
         updated.participants = Array.isArray(updated.participants) ? updated.participants : [];
         updated.reserves = Array.isArray(updated.reserves) ? updated.reserves : [];
 
+        let willBeReserve = false;
         if (asReserve) {
           updated.reserves = [...updated.reserves, newEntry];
+          willBeReserve = true;
         } else {
-          if (updated.participants.length < MAX_PARTICIPANTS) {
+          const currentTotalSlots = updated.participants.reduce(
+            (sum, p) => sum + 1 + (Array.isArray(p.friends) ? p.friends.length : 0),
+            0
+          );
+          const groupSize = 1 + friendsList.length;
+          if (currentTotalSlots + groupSize <= MAX_PARTICIPANTS) {
             updated.participants = [...updated.participants, newEntry];
           } else {
             updated.reserves = [...updated.reserves, newEntry];
+            willBeReserve = true;
           }
         }
 
-        transaction.set(currentSessionRef, {
-          participants: updated.participants,
-          reserves: updated.reserves,
-          lastUpdated: serverTimestamp(),
-        });
+        transaction.set(
+          currentSessionRef,
+          {
+            participants: updated.participants,
+            reserves: updated.reserves,
+            lastUpdated: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        return willBeReserve;
       });
 
       // Increment stats on user document for role and friends
+      const isReserveFinal = asReserve || placedAsReserve;
       await setDoc(
         doc(db, 'users', currentUser.uid),
         {
           stats: {
-            asParticipant: asReserve ? increment(0) : increment(1),
-            asReserve: asReserve ? increment(1) : increment(0),
-            friendsBrought: increment(friendsCount || 0),
+            asParticipant: isReserveFinal ? increment(0) : increment(1),
+            asReserve: isReserveFinal ? increment(1) : increment(0),
+            friendsBrought: increment(clampedFriendsCount),
             totalSessions: increment(0), // updated only at session end
           },
         },
@@ -222,7 +237,7 @@ export default function VolleyballSignup() {
       setFriendsCount(0);
       await loadUserStats(currentUser.uid);
 
-      if (!asReserve && participants.length >= MAX_PARTICIPANTS) {
+      if (placedAsReserve) {
         alert('Lista partecipanti piena! Sei stato aggiunto alle riserve.');
       }
     } catch (e) {
@@ -237,33 +252,59 @@ export default function VolleyballSignup() {
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(currentSessionRef);
         const data = snap.data() || { participants: [], reserves: [] };
-        const participantIndex = data.participants.findIndex((p) => p.uid === currentUser.uid);
-        const reserveIndex = data.reserves.findIndex((r) => r.uid === currentUser.uid);
+        const participantIndex = Array.isArray(data.participants)
+          ? data.participants.findIndex((p) => p.uid === currentUser.uid)
+          : -1;
+        const reserveIndex = Array.isArray(data.reserves)
+          ? data.reserves.findIndex((r) => r.uid === currentUser.uid)
+          : -1;
 
         if (participantIndex === -1 && reserveIndex === -1) {
           throw new Error('Non sei iscritto a questo allenamento.');
         }
 
-        const newParticipants = [...data.participants];
-        let newReserves = [...data.reserves];
+        let newParticipants = Array.isArray(data.participants) ? [...data.participants] : [];
+        let newReserves = Array.isArray(data.reserves) ? [...data.reserves] : [];
 
         if (participantIndex !== -1) {
+          // Remove the participant
           newParticipants.splice(participantIndex, 1);
-          if (newReserves.length > 0) {
-            const firstReserve = newReserves[0];
-            newReserves = newReserves.slice(1);
-            newParticipants.push(firstReserve);
-            // We cannot easily alert from inside transaction; handled outside via flag
+
+          // Calculate available slots considering friends
+          const currentSlots = newParticipants.reduce(
+            (sum, p) => sum + 1 + (Array.isArray(p.friends) ? p.friends.length : 0),
+            0
+          );
+          const availableSlots = MAX_PARTICIPANTS - currentSlots;
+
+          // Promote the first reserve group that fits
+          let movedIndex = -1;
+          for (let i = 0; i < newReserves.length; i++) {
+            const r = newReserves[i];
+            const groupSize = 1 + (Array.isArray(r.friends) ? r.friends.length : 0);
+            if (groupSize <= availableSlots) {
+              newParticipants.push(r);
+              movedIndex = i;
+              break;
+            }
+          }
+          if (movedIndex !== -1) {
+            newReserves.splice(movedIndex, 1);
           }
         } else if (reserveIndex !== -1) {
-          newReserves = newReserves.filter((r) => r.uid !== currentUser.uid);
+          // Remove from reserves
+          newReserves.splice(reserveIndex, 1);
         }
 
-        transaction.set(currentSessionRef, {
-          participants: newParticipants,
-          reserves: newReserves,
-          lastUpdated: serverTimestamp(),
-        });
+        transaction.set(
+          currentSessionRef,
+          {
+            participants: newParticipants,
+            reserves: newReserves,
+            lastUpdated: serverTimestamp(),
+          },
+          { merge: true }
+        );
       });
     } catch (e) {
       alert(e.message || 'Errore durante la disiscrizione');
@@ -469,7 +510,14 @@ export default function VolleyballSignup() {
           <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
-              <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
+              <span
+                className={`px-3 py-1 rounded-full font-semibold text-sm border ${
+                  getTotalCount() > MAX_PARTICIPANTS
+                    ? 'bg-red-900 text-red-200 border-red-700'
+                    : 'bg-green-900 text-green-200 border-green-700'
+                }`}
+                title="Include anche gli amici anonimi"
+              >
                 {getTotalCount()} / {MAX_PARTICIPANTS}
               </span>
             </div>
@@ -512,7 +560,10 @@ export default function VolleyballSignup() {
           <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
-              <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
+              <span
+                className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700"
+                title="Include anche gli amici anonimi"
+              >
                 {getReservesTotalCount()}
               </span>
             </div>
