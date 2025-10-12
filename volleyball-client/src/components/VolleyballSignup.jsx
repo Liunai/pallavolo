@@ -406,24 +406,9 @@ export default function VolleyballSignup() {
                 </div>
               )}
 
+
               {!isUserSignedUp() && (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Numero di amici da portare (max 3)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="3"
-                      value={friendsCount}
-                      onChange={(e) =>
-                        setFriendsCount(Math.min(3, Math.max(0, parseInt(e.target.value) || 0)))
-                      }
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-100"
-                    />
-                  </div>
-
                   <div className="flex gap-3">
                     <button
                       onClick={() => handleSignup(false)}
@@ -439,6 +424,21 @@ export default function VolleyballSignup() {
                       <Clock className="w-5 h-5" />
                       Iscriviti come Riserva
                     </button>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Numero di amici da portare (max 3)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="3"
+                      value={friendsCount}
+                      onChange={(e) =>
+                        setFriendsCount(Math.min(3, Math.max(0, parseInt(e.target.value) || 0)))
+                      }
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-100"
+                    />
                   </div>
                 </div>
               )}
