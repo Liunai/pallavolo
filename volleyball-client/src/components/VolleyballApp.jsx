@@ -1628,13 +1628,7 @@ export default function VolleyballApp() {
                       <img
                         src={participant.photoURL}
                         alt={participant.name}
-                        className={`w-10 h-10 rounded-full border-2 ${
-                          participant.uid === SUPER_ADMIN_EMAIL || 
-                          allUsers.find(u => u.id === participant.uid)?.role === 'admin' ||
-                          allUsers.find(u => u.id === participant.uid)?.email === SUPER_ADMIN_EMAIL
-                            ? 'border-green-400 shadow-lg shadow-blue-500/30' 
-                            : 'border-green-500'
-                        }`}
+                        className="w-10 h-10 rounded-full border-2 border-green-500"
                       />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
@@ -1707,13 +1701,7 @@ export default function VolleyballApp() {
                         <img
                           src={reserve.photoURL}
                           alt={reserve.name}
-                          className={`w-10 h-10 rounded-full border-2 ${
-                            reserve.uid === SUPER_ADMIN_EMAIL || 
-                            allUsers.find(u => u.id === reserve.uid)?.role === 'admin' ||
-                            allUsers.find(u => u.id === reserve.uid)?.email === SUPER_ADMIN_EMAIL
-                              ? 'border-amber-400 shadow-lg shadow-blue-500/30' 
-                              : 'border-amber-500'
-                          }`}
+                          className="w-10 h-10 rounded-full border-2 border-amber-500"
                         />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
