@@ -358,7 +358,7 @@ export default function VolleyballSignup() {
 
       alert('Sessione salvata! Le statistiche sono state aggiornate.');
       if (currentUser) await loadUserStats(currentUser.uid);
-    } catch (e) {
+    } catch {
       alert('Errore durante la chiusura della sessione');
     }
   };
@@ -381,9 +381,6 @@ export default function VolleyballSignup() {
                 )}
               </div>
             </div>
-            {isLoggedIn && (
-              // ...solo icona utente, area personale gestita sotto
-            )}
           </div>
 
           {/* HEADER: icona utente in alto a destra */}
@@ -529,7 +526,12 @@ export default function VolleyballSignup() {
                     </div>
                   )}
                   {isUserSignedUp() && (
-                    {/* Pulsante disiscrizione rimosso da qui, rimane solo in cima */}
+                    <button
+                      onClick={handleUnsubscribe}
+                      className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                    >
+                      Disiscriviti
+                    </button>
                   )}
                   {/* Liste partecipanti/riserve */}
                   <div className="grid md:grid-cols-2 gap-6 mt-8">
@@ -618,6 +620,37 @@ export default function VolleyballSignup() {
                       </div>
                     </div>
                   </div>
+
+                  {isAdmin && (
+                    <div className="space-y-4 mt-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
+                        <input
+                          id="nextSessionDate"
+                          type="datetime-local"
+                          value={nextSessionDate}
+                          onChange={e => setNextSessionDate(e.target.value)}
+                          className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={handleNewSession}
+                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                      >
+                        <Calendar className="w-5 h-5" />
+                        Nuova partita
+                      </button>
+                      {(participants.length > 0 || reserves.length > 0) && (
+                        <button
+                          onClick={handleEndSession}
+                          className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
+                        >
+                          <Calendar className="w-5 h-5" />
+                          Concludi sessione e salva statistiche
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="bg-yellow-900 text-yellow-100 rounded-lg p-4 border border-yellow-700 text-center">
@@ -626,76 +659,10 @@ export default function VolleyballSignup() {
               )}
             </div>
           )}
-
-              {/* Rimossa area statistiche personale */}
-
-
-              {!isUserSignedUp() && (
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleSignup(false)}
-                      className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2"
-                    >
-                      <UserPlus className="w-5 h-5" />
-                      Iscriviti come Partecipante
-                    </button>
-                    <button
-                      onClick={() => handleSignup(true)}
-                      className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium flex items-center justify-center gap-2"
-                    >
-                      <Clock className="w-5 h-5" />
-                      Iscriviti come Riserva
-                    </button>
-                  </div>
-                  {/* Rimosso input amici legacy, ora gestito con pulsante e input nome */}
-                </div>
-              )}
-
-              {isUserSignedUp() && (
-                <button
-                  onClick={handleUnsubscribe}
-                  className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
-                >
-                  Disiscriviti
-                </button>
-              )}
-
-              {isAdmin && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
-                    <input
-                      id="nextSessionDate"
-                      type="datetime-local"
-                      value={nextSessionDate}
-                      onChange={e => setNextSessionDate(e.target.value)}
-                      className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleNewSession}
-                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-                  >
-                    <Calendar className="w-5 h-5" />
-                    Nuova partita
-                  </button>
-                  {(participants.length > 0 || reserves.length > 0) && (
-                    <button
-                      onClick={handleEndSession}
-                      className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
-                    >
-                      <Calendar className="w-5 h-5" />
-                      Concludi sessione e salva statistiche
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-      {/* Le liste sono ora mostrate solo nel blocco condizionale canSignup */}
+        {/* Le liste sono ora mostrate solo nel blocco condizionale canSignup */}
+      </div>
     </div>
   );
 }

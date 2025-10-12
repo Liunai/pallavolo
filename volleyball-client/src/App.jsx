@@ -13,7 +13,7 @@ export default function App() {
   const [showSession, setShowSession] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasActiveSession, setHasActiveSession] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null); // eslint-disable-line no-unused-vars
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
