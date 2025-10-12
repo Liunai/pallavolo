@@ -146,17 +146,18 @@ export default function VolleyballApp() {
         setReserves(Array.isArray(data?.reserves) ? data.reserves : []);
         setSessionDate(data?.date || null);
         
-        // Determine current view based on data - only if not manually navigating
-        if (currentView !== VIEW_STATES.MATCH_HISTORY && currentView !== VIEW_STATES.MATCH_DETAIL) {
-          if (data?.date) {
-            // Se c'è una partita attiva, mostra la lista partite
-            setCurrentView(VIEW_STATES.MATCH_LIST);
-            setSelectedMatch(data);
-          } else {
-            // Se non c'è partita, mostra la vista "nessuna partita"
-            setCurrentView(VIEW_STATES.NO_MATCHES);
-          }
-        }
+        // NON cambiare automaticamente la vista - lasciamo che l'utente controlli la navigazione
+        // Aggiorna solo i dati senza interferire con currentView
+        // if (currentView !== VIEW_STATES.MATCH_HISTORY && 
+        //     currentView !== VIEW_STATES.MATCH_DETAIL && 
+        //     currentView !== VIEW_STATES.USERS_LIST) {
+        //   if (data?.date) {
+        //     setCurrentView(VIEW_STATES.MATCH_LIST);
+        //     setSelectedMatch(data);
+        //   } else {
+        //     setCurrentView(VIEW_STATES.NO_MATCHES);
+        //   }
+        // }
       });
     })();
     return () => {
@@ -674,7 +675,9 @@ export default function VolleyballApp() {
   };
 
   // Non permettere iscrizione se non esiste una partita selezionata
-  const canSignup = !!selectedMatch;
+  // Distingue tra partite attive (si può iscrivere) e storiche (solo visualizzazione)
+  const canSignup = !!selectedMatch && activeMatches.some(match => match.id === selectedMatch.id);
+  const isHistoricalMatch = !!selectedMatch && !activeMatches.some(match => match.id === selectedMatch.id);
 
   const getTotalCount = () => {
     if (!selectedMatch) return 0;
@@ -1261,6 +1264,21 @@ export default function VolleyballApp() {
 
     return (
       <div className="space-y-6">
+        {/* Header per partite storiche */}
+        {isHistoricalMatch && (
+          <div className="bg-gray-700 border border-gray-600 rounded-lg p-4">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-gray-300 font-medium">Partita Storica - Solo Visualizzazione</span>
+            </div>
+            <p className="text-sm text-gray-400 mt-1">
+              Questa partita è stata completata e non è più possibile iscriversi o modificare i partecipanti.
+            </p>
+          </div>
+        )}
+        
         {/* Pulsanti iscrizione/disiscrizione */}
         {canSignup && (
           <>
@@ -1528,114 +1546,140 @@ export default function VolleyballApp() {
   };
 
   // Render match history view
-  const renderMatchHistoryView = () => (
-    <div className="space-y-6">
-      {matchHistory.length === 0 ? (
-        <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
-          <p className="text-gray-400">Nessuna partita nel database</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {matchHistory.map((session, index) => (
-            <div key={session.id} className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-100">
-                  Partita #{matchHistory.length - index}
-                </h3>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400">
-                    {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT') : 'Data non disponibile'}
-                  </span>
-                  {isAdmin && (
-                    <>
-                      <button
-                        onClick={() => handleIgnoreSession(session.id)}
-                        className={`text-yellow-400 hover:text-yellow-300 text-xs px-2 py-1 rounded transition ${
-                          session.ignoredFromStats ? 'bg-yellow-900/50' : 'bg-yellow-900/30 hover:bg-yellow-900/50'
-                        }`}
-                        title={session.ignoredFromStats ? "Sessione ignorata" : "Ignora dalle statistiche"}
-                      >
-                        {session.ignoredFromStats ? '👁️‍🗨️' : '🙈'}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSession(session.id)}
-                        className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                        title="Elimina sessione"
-                      >
-                        🗑️
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Partecipanti */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-lg font-semibold text-gray-100">Partecipanti</h4>
-                    <span className="bg-green-900 text-green-200 px-2 py-1 rounded-full text-sm border border-green-700">
-                      {session.participants?.length || 0}
-                    </span>
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {session.participants?.length > 0 ? (
-                      session.participants.map((participant, pIndex) => (
-                        <div key={pIndex} className="bg-green-900/50 rounded-lg p-3 border border-green-700">
-                          <div className="font-medium text-gray-100">{participant.name}</div>
-                          {participant.friends?.length > 0 && (
-                            <div className="mt-1">
-                              {participant.friends.map((friend, fIndex) => (
-                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-1">
-                                  <span className="text-green-400">+</span>
-                                  {friend}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-500 text-center py-2">Nessun partecipante</p>
-                    )}
-                  </div>
-                </div>
+  // Riapri partita (solo admin)
+  const handleReopenMatch = async (session) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler riaprire questa partita? Verrà aggiunta alle partite attive.');
+    if (!confirmed) return;
 
-                {/* Riserve */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-lg font-semibold text-gray-100">Riserve</h4>
-                    <span className="bg-amber-900 text-amber-200 px-2 py-1 rounded-full text-sm border border-amber-700">
-                      {session.reserves?.length || 0}
-                    </span>
+    try {
+      // Crea nuova partita attiva usando i dati della sessione storica
+      await addDoc(collection(db, 'activeMatches'), {
+        participants: session.participants || [],
+        reserves: session.reserves || [],
+        date: session.date.toDate ? session.date.toDate().toISOString() : new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+        createdBy: currentUser.uid,
+        status: 'active',
+        reopenedFrom: session.id
+      });
+
+      // Rimuovi la sessione dallo storico
+      await deleteDoc(doc(db, 'sessions', session.id));
+      
+      alert('Partita riaperta con successo!');
+      await loadMatchHistory();
+    } catch (error) {
+      console.error('Errore nella riapertura della partita:', error);
+      alert('Errore nella riapertura della partita');
+    }
+  };
+
+  const renderMatchHistoryView = () => (
+    <div className="space-y-4 md:space-y-6">
+      <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Storico Partite</h2>
+        
+        {matchHistory.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">Nessuna partita nel database</p>
+          </div>
+        ) : (
+          <div className="space-y-3 md:space-y-4">
+            {matchHistory.map((session, index) => (
+              <div 
+                key={session.id}
+                className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600 hover:border-indigo-500 transition group"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div 
+                    onClick={() => {
+                      setSelectedMatch({
+                        ...session,
+                        id: session.id,
+                        date: session.date.toDate ? session.date.toDate().toISOString() : new Date().toISOString()
+                      });
+                      setCurrentView(VIEW_STATES.MATCH_DETAIL);
+                    }}
+                    className="flex-1 cursor-pointer"
+                  >
+                    <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
+                      Partita #{matchHistory.length - index}
+                    </h3>
+                    <p className="text-sm md:text-base text-gray-400 mt-1">
+                      {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT', { 
+                        dateStyle: 'short', 
+                        timeStyle: 'short' 
+                      }) : 'Data non disponibile'}
+                    </p>
+                    {session.ignoredFromStats && (
+                      <span className="inline-block mt-1 text-xs bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded">
+                        Ignorata dalle statistiche
+                      </span>
+                    )}
                   </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {session.reserves?.length > 0 ? (
-                      session.reserves.map((reserve, rIndex) => (
-                        <div key={rIndex} className="bg-amber-900/50 rounded-lg p-3 border border-amber-700">
-                          <div className="font-medium text-gray-100">{reserve.name}</div>
-                          {reserve.friends?.length > 0 && (
-                            <div className="mt-1">
-                              {reserve.friends.map((friend, fIndex) => (
-                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-1">
-                                  <span className="text-amber-400">+</span>
-                                  {friend}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-500 text-center py-2">Nessuna riserva</p>
+                  <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
+                    <div className="text-center">
+                      <div className="text-lg md:text-2xl font-bold text-green-400">
+                        {(session.participants?.length || 0) + (session.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                      </div>
+                      <div className="text-xs text-gray-400">Partecipanti</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg md:text-2xl font-bold text-amber-400">
+                        {(session.reserves?.length || 0) + (session.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
+                      </div>
+                      <div className="text-xs text-gray-400">Riserve</div>
+                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReopenMatch(session);
+                          }}
+                          className="p-1 md:p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
+                          title="Riapri partita"
+                        >
+                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleIgnoreSession(session.id);
+                          }}
+                          className={`p-1 md:p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20 rounded-lg transition ${
+                            session.ignoredFromStats ? 'bg-yellow-900/50' : ''
+                          }`}
+                          title={session.ignoredFromStats ? "Riattiva nelle statistiche" : "Ignora dalle statistiche"}
+                        >
+                          {session.ignoredFromStats ? '👁️' : '🙈'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSession(session.id);
+                          }}
+                          className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                          title="Elimina partita"
+                        >
+                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 
