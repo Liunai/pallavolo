@@ -41,6 +41,15 @@ export default function VolleyballApp() {
   const [friendInput, setFriendInput] = useState("");
   const [showStats, setShowStats] = useState(false);
   const [userStats, setUserStats] = useState(null);
+  
+  // States for user name customization
+  const [customDisplayName, setCustomDisplayName] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempDisplayName, setTempDisplayName] = useState("");
+  
+  // States for viewing other users' stats
+  const [showUserStatsModal, setShowUserStatsModal] = useState(false);
+  const [selectedUserStats, setSelectedUserStats] = useState(null);
 
   // New state management for unified component
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
@@ -57,8 +66,20 @@ export default function VolleyballApp() {
       if (user) {
         setCurrentUser(user);
         setIsLoggedIn(true);
+        
+        // Load or create user document
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setCustomDisplayName(userData.customDisplayName || user.displayName);
+        } else {
+          setCustomDisplayName(user.displayName);
+        }
+        
         await setDoc(
-          doc(db, 'users', user.uid),
+          userDocRef,
           {
             email: user.email,
             displayName: user.displayName,
@@ -73,6 +94,8 @@ export default function VolleyballApp() {
         setIsLoggedIn(false);
         setShowStats(false);
         setUserStats(null);
+        setCustomDisplayName("");
+        setIsEditingName(false);
       }
     });
     return () => unsub();
@@ -200,7 +223,6 @@ export default function VolleyballApp() {
         status: 'active'
       });
 
-      alert('Nuova partita creata!');
       console.log('Partita creata con ID:', newMatchRef.id);
     } catch (error) {
       console.error('Errore nella creazione della partita:', error);
@@ -238,6 +260,178 @@ export default function VolleyballApp() {
     await signOut(auth);
     setIsLoggedIn(false);
     setCurrentUser(null);
+  };
+
+  // Functions for custom display name
+  const handleEditName = () => {
+    setTempDisplayName(customDisplayName);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!currentUser || !tempDisplayName.trim()) return;
+    
+    try {
+      await setDoc(
+        doc(db, 'users', currentUser.uid),
+        {
+          customDisplayName: tempDisplayName.trim(),
+        },
+        { merge: true }
+      );
+      setCustomDisplayName(tempDisplayName.trim());
+      setIsEditingName(false);
+    } catch (error) {
+      console.error('Errore nel salvataggio del nome:', error);
+      alert('Errore nel salvataggio del nome');
+    }
+  };
+
+  const handleCancelEditName = () => {
+    setTempDisplayName("");
+    setIsEditingName(false);
+  };
+
+  // Function to load another user's stats
+  const loadOtherUserStats = async (uid, displayName) => {
+    try {
+      const userSnap = await getDoc(doc(db, 'users', uid));
+      const user = userSnap.exists() ? userSnap.data() : {};
+
+      // Load sessions where user participated
+      const q = query(
+        collection(db, 'sessions'),
+        where('participantUids', 'array-contains', uid),
+        orderBy('date', 'desc')
+      );
+      const sessionsSnap = await getDocs(q);
+      const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      setSelectedUserStats({
+        uid,
+        displayName: user.customDisplayName || displayName,
+        totalSessions: user?.stats?.totalSessions || 0,
+        asParticipant: user?.stats?.asParticipant || 0,
+        asReserve: user?.stats?.asReserve || 0,
+        friendsBrought: user?.stats?.friendsBrought || 0,
+        sessionsHistory: sessions,
+      });
+      setShowUserStatsModal(true);
+    } catch (error) {
+      console.error('Errore nel caricamento delle statistiche:', error);
+      alert('Errore nel caricamento delle statistiche');
+    }
+  };
+
+  // Admin function to reset user statistics
+  const handleResetUserStats = async (uid) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler resettare tutte le statistiche di questo utente?');
+    if (!confirmed) return;
+
+    try {
+      await setDoc(
+        doc(db, 'users', uid),
+        {
+          stats: {
+            totalSessions: 0,
+            asParticipant: 0,
+            asReserve: 0,
+            friendsBrought: 0,
+          },
+        },
+        { merge: true }
+      );
+      alert('Statistiche resettate con successo');
+      // Se stiamo visualizzando le stats di questo utente, aggiorniamole
+      if (selectedUserStats && selectedUserStats.uid === uid) {
+        setSelectedUserStats({
+          ...selectedUserStats,
+          totalSessions: 0,
+          asParticipant: 0,
+          asReserve: 0,
+          friendsBrought: 0,
+        });
+      }
+      // Se l'utente sta resettando le proprie stats, aggiorniamo anche quelle
+      if (currentUser && currentUser.uid === uid) {
+        loadUserStats(uid);
+      }
+    } catch (error) {
+      console.error('Errore nel reset delle statistiche:', error);
+      alert('Errore nel reset delle statistiche');
+    }
+  };
+
+  // Admin function to delete session from history
+  const handleDeleteSession = async (sessionId) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler eliminare questa sessione dalle statistiche?');
+    if (!confirmed) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const sessionRef = doc(db, 'sessions', sessionId);
+        const sessionSnap = await transaction.get(sessionRef);
+        
+        if (!sessionSnap.exists()) {
+          throw new Error('Sessione non trovata');
+        }
+        
+        const sessionData = sessionSnap.data();
+        
+        // Aggiorna le statistiche di tutti gli utenti che parteciparono
+        const userUpdates = [
+          ...(sessionData.participantUids || []).map(uid => ({
+            uid,
+            participant: true
+          })),
+          ...(sessionData.reserveUids || []).map(uid => ({
+            uid,
+            participant: false
+          }))
+        ];
+
+        for (const update of userUpdates) {
+          const userRef = doc(db, 'users', update.uid);
+          const userSnap = await transaction.get(userRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const currentStats = userData.stats || {};
+            
+            transaction.update(userRef, {
+              stats: {
+                ...currentStats,
+                totalSessions: Math.max(0, (currentStats.totalSessions || 1) - 1),
+                asParticipant: update.participant ? 
+                  Math.max(0, (currentStats.asParticipant || 1) - 1) : 
+                  (currentStats.asParticipant || 0),
+                asReserve: !update.participant ? 
+                  Math.max(0, (currentStats.asReserve || 1) - 1) : 
+                  (currentStats.asReserve || 0),
+              }
+            });
+          }
+        }
+
+        // Elimina la sessione
+        transaction.delete(sessionRef);
+      });
+
+      alert('Sessione eliminata con successo');
+      
+      // Ricarica la cronologia e le statistiche
+      loadMatchHistory();
+      if (currentUser) {
+        loadUserStats(currentUser.uid);
+      }
+    } catch (error) {
+      console.error('Errore nell\'eliminazione della sessione:', error);
+      alert('Errore nell\'eliminazione della sessione');
+    }
   };
 
   const loadUserStats = async (uid) => {
@@ -318,7 +512,7 @@ export default function VolleyballApp() {
 
         const newEntry = {
           uid: currentUser.uid,
-          name: currentUser.displayName,
+          name: customDisplayName || currentUser.displayName,
           photoURL: currentUser.photoURL,
           friends,
           timestamp: new Date().toLocaleString('it-IT'),
@@ -599,32 +793,73 @@ export default function VolleyballApp() {
               />
             </button>
             {showStats && userStats && (
-              <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10 p-6">
-                <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
-                  <Award className="w-6 h-6 text-yellow-500" />
+              <div className="absolute right-0 mt-2 w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-6">
+                <h3 className="text-lg font-bold text-gray-100 mb-4 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-yellow-500" />
                   Le tue statistiche
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                    <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
-                    <div className="text-sm text-gray-400">Sessioni totali</div>
+                
+                {/* Nome utente personalizzabile */}
+                <div className="mb-4 p-3 bg-gray-700/30 rounded-lg border border-gray-600/50">
+                  <div className="text-xs text-gray-400 mb-1">Nome visualizzato</div>
+                  {isEditingName ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={tempDisplayName}
+                        onChange={(e) => setTempDisplayName(e.target.value)}
+                        className="w-full px-2 py-1 bg-gray-600 text-gray-100 rounded border border-gray-500 text-sm"
+                        placeholder="Inserisci il tuo nome"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveName}
+                          className="flex-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition"
+                        >
+                          Salva
+                        </button>
+                        <button
+                          onClick={handleCancelEditName}
+                          className="flex-1 px-2 py-1 bg-gray-600 text-gray-100 rounded text-xs hover:bg-gray-700 transition"
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-100 font-medium">{customDisplayName}</span>
+                      <button
+                        onClick={handleEditName}
+                        className="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                      >
+                        Modifica
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                    <div className="text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
+                    <div className="text-xs text-gray-400">Sessioni totali</div>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                    <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
-                    <div className="text-sm text-gray-400">Come partecipante</div>
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                    <div className="text-xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
+                    <div className="text-xs text-gray-400">Come partecipante</div>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                    <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
-                    <div className="text-sm text-gray-400">Come riserva</div>
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                    <div className="text-xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
+                    <div className="text-xs text-gray-400">Come riserva</div>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                    <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
-                    <div className="text-sm text-gray-400">Amici portati</div>
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                    <div className="text-xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
+                    <div className="text-xs text-gray-400">Amici portati</div>
                   </div>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="mt-6 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
+                  className="mt-4 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600 text-sm"
                 >
                   Esci
                 </button>
@@ -896,6 +1131,13 @@ export default function VolleyballApp() {
                               <span className="font-medium text-gray-100">{participant.name}</span>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs text-gray-400">{participant.timestamp}</span>
+                                <button
+                                  onClick={() => loadOtherUserStats(participant.uid, participant.name)}
+                                  className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                  title="Visualizza statistiche"
+                                >
+                                  📊
+                                </button>
                                 {isAdmin && (
                                   <button
                                     onClick={() => handleAdminRemoveUser(participant.uid, false)}
@@ -961,6 +1203,13 @@ export default function VolleyballApp() {
                               </span>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                                <button
+                                  onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
+                                  className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                  title="Visualizza statistiche"
+                                >
+                                  📊
+                                </button>
                                 {isAdmin && (
                                   <button
                                     onClick={() => handleAdminRemoveUser(reserve.uid, true)}
@@ -1050,9 +1299,20 @@ export default function VolleyballApp() {
                 <h3 className="text-xl font-bold text-gray-100">
                   Partita #{matchHistory.length - index}
                 </h3>
-                <span className="text-sm text-gray-400">
-                  {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT') : 'Data non disponibile'}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-400">
+                    {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT') : 'Data non disponibile'}
+                  </span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteSession(session.id)}
+                      className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                      title="Elimina sessione"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
               </div>
               
               <div className="grid md:grid-cols-2 gap-6">
@@ -1135,6 +1395,61 @@ export default function VolleyballApp() {
         {currentView === VIEW_STATES.MATCH_LIST && renderMatchListView()}
         {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
         {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
+        
+        {/* Modal statistiche utente */}
+        {showUserStatsModal && selectedUserStats && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-yellow-500" />
+                  Statistiche di {selectedUserStats.displayName}
+                </h3>
+                <button
+                  onClick={() => setShowUserStatsModal(false)}
+                  className="text-gray-400 hover:text-gray-200 transition"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-indigo-400">{selectedUserStats.totalSessions || 0}</div>
+                  <div className="text-xs text-gray-400">Sessioni totali</div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-green-400">{selectedUserStats.asParticipant || 0}</div>
+                  <div className="text-xs text-gray-400">Come partecipante</div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-amber-400">{selectedUserStats.asReserve || 0}</div>
+                  <div className="text-xs text-gray-400">Come riserva</div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-purple-400">{selectedUserStats.friendsBrought || 0}</div>
+                  <div className="text-xs text-gray-400">Amici portati</div>
+                </div>
+              </div>
+              
+              {isAdmin && (
+                <button
+                  onClick={() => handleResetUserStats(selectedUserStats.uid)}
+                  className="mt-4 w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition border border-red-500 text-sm"
+                >
+                  🗑️ Reset statistiche utente
+                </button>
+              )}
+              
+              <button
+                onClick={() => setShowUserStatsModal(false)}
+                className="mt-2 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600 text-sm"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
