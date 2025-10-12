@@ -287,13 +287,21 @@ export default function VolleyballApp() {
     try {
       const res = await signInWithPopup(auth, provider);
       const user = res.user;
+      
+      // Leggi prima il documento esistente per preservare customDisplayName
+      const userDocRef = doc(db, 'users', user.uid);
+      const existingDoc = await getDoc(userDocRef);
+      const existingData = existingDoc.exists() ? existingDoc.data() : {};
+      
       await setDoc(
-        doc(db, 'users', user.uid),
+        userDocRef,
         {
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
           lastLogin: serverTimestamp(),
+          // Preserva customDisplayName se esiste già
+          ...(existingData.customDisplayName && { customDisplayName: existingData.customDisplayName })
         },
         { merge: true }
       );
@@ -1738,6 +1746,27 @@ export default function VolleyballApp() {
   );
 
   // Render users list view (accessible to all logged users)
+  // Rimuovi utente completamente (solo admin)
+  const handleDeleteUser = async (userId, userName) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm(`Sei sicuro di voler eliminare completamente l'utente "${userName}"? Questa azione non può essere annullata.`);
+    if (!confirmed) return;
+
+    try {
+      // Rimuovi l'utente dalla collezione users
+      await deleteDoc(doc(db, 'users', userId));
+      
+      // Ricarica la lista utenti
+      await loadAllUsers();
+      
+      alert('Utente eliminato con successo');
+    } catch (error) {
+      console.error('Errore nell\'eliminazione utente:', error);
+      alert('Errore nell\'eliminazione utente');
+    }
+  };
+
   const renderUsersListView = () => {
     return (
       <div className="space-y-6">
@@ -1764,29 +1793,21 @@ export default function VolleyballApp() {
                           <div className="font-medium text-gray-100 truncate">
                             {user.customDisplayName || user.displayName}
                           </div>
-                          <div className="text-sm text-gray-400 truncate">{user.email}</div>
-                          <div className="text-xs text-gray-500">
-                            {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
-                          </div>
                         </div>
                         
                         {/* User statistics - inline for desktop, below for mobile */}
                         <div className="flex gap-2 md:gap-3 text-xs">
                           <div className="text-center">
                             <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
-                            <div className="text-gray-400">Tot</div>
+                            <div className="text-gray-400">Partite</div>
                           </div>
                           <div className="text-center">
                             <div className="font-bold text-green-400">{user.stats?.asParticipant || 0}</div>
                             <div className="text-gray-400">Part</div>
                           </div>
                           <div className="text-center">
-                            <div className="font-bold text-amber-400">{user.stats?.asReserve || 0}</div>
-                            <div className="text-gray-400">Ris</div>
-                          </div>
-                          <div className="text-center">
                             <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
-                            <div className="text-gray-400">Ami</div>
+                            <div className="text-gray-400">Amici</div>
                           </div>
                         </div>
                       </div>
@@ -1834,6 +1855,17 @@ export default function VolleyballApp() {
                       >
                         📊 Stats
                       </button>
+                      
+                      {/* Delete button - only for admins and not for super-admin or current user */}
+                      {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id, user.customDisplayName || user.displayName)}
+                          className="px-2 md:px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                          title="Elimina utente"
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
