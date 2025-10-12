@@ -71,6 +71,7 @@ export default function VolleyballSignup() {
           participants: [],
           reserves: [],
           lastUpdated: serverTimestamp(),
+          date: getNextTuesday(),
         });
       }
       unsub = onSnapshot(currentSessionRef, (docSnap) => {
@@ -83,6 +84,39 @@ export default function VolleyballSignup() {
       if (typeof unsub === 'function') unsub();
     };
   }, [currentSessionRef]);
+
+
+  // Funzione per calcolare la data del martedì successivo alle 20:30
+  function getNextTuesday() {
+    const today = new Date();
+    const day = today.getDay();
+    // 2 = martedì
+    const daysUntilTuesday = (9 - day) % 7 || 7;
+    const nextTuesday = new Date(today);
+    nextTuesday.setDate(today.getDate() + daysUntilTuesday);
+    nextTuesday.setHours(20, 30, 0, 0); // ore 20:30
+    // Per input datetime-local serve formato YYYY-MM-DDTHH:MM
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${nextTuesday.getFullYear()}-${pad(nextTuesday.getMonth() + 1)}-${pad(nextTuesday.getDate())}T${pad(nextTuesday.getHours())}:${pad(nextTuesday.getMinutes())}`;
+  }
+
+  // Stato locale per la data della prossima partita
+  const [nextSessionDate, setNextSessionDate] = useState(getNextTuesday());
+
+  // Solo admin può creare nuova partita
+  const isAdmin = currentUser?.email === 'tidolamiamail@gmail.com';
+
+  // Crea nuova partita (reset iscrizioni, data martedì successivo)
+  const handleNewSession = async () => {
+    if (!isAdmin) return;
+    await setDoc(currentSessionRef, {
+      participants: [],
+      reserves: [],
+      lastUpdated: serverTimestamp(),
+      date: nextSessionDate,
+    }, { merge: true });
+    alert('Nuova partita creata!');
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -452,14 +486,35 @@ export default function VolleyballSignup() {
                 </button>
               )}
 
-              {(participants.length > 0 || reserves.length > 0) && (
-                <button
-                  onClick={handleEndSession}
-                  className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
-                >
-                  <Calendar className="w-5 h-5" />
-                  Concludi sessione e salva statistiche
-                </button>
+              {isAdmin && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
+                    <input
+                      id="nextSessionDate"
+                      type="datetime-local"
+                      value={nextSessionDate}
+                      onChange={e => setNextSessionDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleNewSession}
+                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    Nuova partita
+                  </button>
+                  {(participants.length > 0 || reserves.length > 0) && (
+                    <button
+                      onClick={handleEndSession}
+                      className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-5 h-5" />
+                      Concludi sessione e salva statistiche
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
