@@ -384,6 +384,79 @@ export default function VolleyballApp() {
     }
   };
 
+  // Admin function to recalculate all user statistics from actual database data
+  const handleRecalculateAllStats = async () => {
+    if (!isSuperAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler ricalcolare tutte le statistiche di tutti gli utenti basandosi sui dati reali del database? Questa operazione potrebbe richiedere alcuni minuti.');
+    if (!confirmed) return;
+
+    try {
+      // Get all sessions from database
+      const sessionsQuery = query(collection(db, 'sessions'), orderBy('date', 'desc'));
+      const sessionsSnap = await getDocs(sessionsQuery);
+      
+      // Get all users
+      const usersQuery = query(collection(db, 'users'));
+      const usersSnap = await getDocs(usersQuery);
+      
+      // Initialize stats object for all users
+      const userStats = {};
+      usersSnap.docs.forEach(doc => {
+        userStats[doc.id] = {
+          totalSessions: 0,
+          asParticipant: 0,
+          asReserve: 0,
+          friendsBrought: 0,
+        };
+      });
+      
+      // Calculate stats from actual sessions
+      sessionsSnap.docs.forEach(sessionDoc => {
+        const session = sessionDoc.data();
+        
+        // Count participants
+        (session.participants || []).forEach(participant => {
+          if (userStats[participant.uid]) {
+            userStats[participant.uid].totalSessions += 1;
+            userStats[participant.uid].asParticipant += 1;
+            userStats[participant.uid].friendsBrought += (participant.friends?.length || 0);
+          }
+        });
+        
+        // Count reserves
+        (session.reserves || []).forEach(reserve => {
+          if (userStats[reserve.uid]) {
+            userStats[reserve.uid].asReserve += 1;
+            userStats[reserve.uid].friendsBrought += (reserve.friends?.length || 0);
+          }
+        });
+      });
+      
+      // Update all user stats in database
+      const updatePromises = Object.entries(userStats).map(([uid, stats]) =>
+        setDoc(
+          doc(db, 'users', uid),
+          { stats },
+          { merge: true }
+        )
+      );
+      
+      await Promise.all(updatePromises);
+      
+      alert(`Statistiche ricalcolate con successo per ${Object.keys(userStats).length} utenti!`);
+      
+      // Refresh current user stats if needed
+      if (currentUser) {
+        loadUserStats(currentUser.uid);
+      }
+      
+    } catch (error) {
+      console.error('Errore nel ricalcolo delle statistiche:', error);
+      alert('Errore nel ricalcolo delle statistiche');
+    }
+  };
+
   // Admin function to reset user statistics
   const handleResetUserStats = async (uid) => {
     if (!isAdmin) return;
@@ -1103,7 +1176,9 @@ export default function VolleyballApp() {
               <img
                 src={currentUser.photoURL || ''}
                 alt={currentUser.displayName || ''}
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-indigo-500 object-cover"
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 object-cover ${
+                  isAdmin ? 'border-blue-500 shadow-lg shadow-blue-500/30' : 'border-indigo-500'
+                }`}
               />
             </button>
             {showStats && userStats && (
@@ -1553,7 +1628,13 @@ export default function VolleyballApp() {
                       <img
                         src={participant.photoURL}
                         alt={participant.name}
-                        className="w-10 h-10 rounded-full border-2 border-green-500"
+                        className={`w-10 h-10 rounded-full border-2 ${
+                          participant.uid === SUPER_ADMIN_EMAIL || 
+                          allUsers.find(u => u.id === participant.uid)?.role === 'admin' ||
+                          allUsers.find(u => u.id === participant.uid)?.email === SUPER_ADMIN_EMAIL
+                            ? 'border-green-400 shadow-lg shadow-blue-500/30' 
+                            : 'border-green-500'
+                        }`}
                       />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
@@ -1626,7 +1707,13 @@ export default function VolleyballApp() {
                         <img
                           src={reserve.photoURL}
                           alt={reserve.name}
-                          className="w-10 h-10 rounded-full border-2 border-amber-500"
+                          className={`w-10 h-10 rounded-full border-2 ${
+                            reserve.uid === SUPER_ADMIN_EMAIL || 
+                            allUsers.find(u => u.id === reserve.uid)?.role === 'admin' ||
+                            allUsers.find(u => u.id === reserve.uid)?.email === SUPER_ADMIN_EMAIL
+                              ? 'border-amber-400 shadow-lg shadow-blue-500/30' 
+                              : 'border-amber-500'
+                          }`}
                         />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
@@ -1891,7 +1978,21 @@ export default function VolleyballApp() {
           </div>
         ) : (
           <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
-            <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Lista Utenti</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-100">Lista Utenti</h2>
+              {isSuperAdmin && (
+                <button
+                  onClick={handleRecalculateAllStats}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm flex items-center gap-2"
+                  title="Ricalcola tutte le statistiche basandosi sui dati reali"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Ricalcola Stats
+                </button>
+              )}
+            </div>
             
             <div className="space-y-3 md:space-y-4">
               {allUsers.map((user) => (
@@ -1901,7 +2002,11 @@ export default function VolleyballApp() {
                       <img
                         src={user.photoURL || ''}
                         alt={user.displayName || ''}
-                        className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-indigo-500 flex-shrink-0 object-cover"
+                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex-shrink-0 object-cover ${
+                          user.email === SUPER_ADMIN_EMAIL || user.role === 'admin' 
+                            ? 'border-blue-500 shadow-lg shadow-blue-500/30' 
+                            : 'border-indigo-500'
+                        }`}
                       />
                       <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 min-w-0 flex-1">
                         <div className="min-w-0">
