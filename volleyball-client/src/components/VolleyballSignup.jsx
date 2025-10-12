@@ -103,7 +103,8 @@ export default function VolleyballSignup() {
       setIsLoggedIn(true);
       loadUserStats(user.uid);
     } catch (e) {
-      alert('Errore durante il login');
+      alert(`Errore durante il login: ${e.message || e}`);
+      console.error('Login error:', e);
     } finally {
       setLoading(false);
     }
@@ -322,8 +323,7 @@ export default function VolleyballSignup() {
                 <Users className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-100">Allenamento Pallavolo</h1>
-                <p className="text-gray-400">Sistema di gestione iscrizioni</p>
+                <h1 className="text-3xl font-bold text-gray-100">Iscrizioni pallavolo</h1>
               </div>
             </div>
             {isLoggedIn && (

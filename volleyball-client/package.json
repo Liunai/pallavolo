@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "deploy:pages": "npm run build && npx gh-pages -d dist",
     "dev:demo": "cross-env VITE_DEMO_MODE=true VITE_USE_EMULATOR=true vite",
     "build": "vite build",
     "deploy": "npm run build && firebase deploy",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "firebase": "^12.3.0",
+    "gh-pages": "^6.3.0",
     "lucide-react": "^0.545.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
