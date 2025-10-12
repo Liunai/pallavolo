@@ -201,7 +201,7 @@ export default function VolleyballApp() {
         unsubscribe.then(unsub => unsub());
       }
     };
-  }, [currentView]);
+  }, []); // Rimossa dipendenza currentView che causava loop infinito
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -875,9 +875,16 @@ export default function VolleyballApp() {
     }
   };
 
-  const handleEndSession = async () => {
+  const handleEndMatch = async () => {
     try {
-      const snap = await getDoc(currentSessionRef);
+      // Leggi i dati dalla partita attiva selezionata, non dalla currentSession
+      if (!selectedMatch) {
+        alert('Nessuna partita selezionata');
+        return;
+      }
+      
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+      const snap = await getDoc(matchRef);
       const data = snap.data() || { participants: [], reserves: [] };
       
       // Se non ci sono partecipanti, chiedi conferma per eliminare la partita
@@ -885,27 +892,15 @@ export default function VolleyballApp() {
         const confirmed = confirm('Non ci sono partecipanti in questa partita. Vuoi eliminarla?');
         if (!confirmed) return;
         
-        // Elimina la partita dalla collezione activeMatches se esiste
-        if (selectedMatch?.id) {
-          await deleteDoc(doc(db, 'activeMatches', selectedMatch.id));
-          alert('Partita eliminata con successo');
-          setCurrentView(VIEW_STATES.MATCH_LIST);
-          return;
-        }
-        
-        // Altrimenti pulisci solo la sessione corrente
-        await setDoc(currentSessionRef, {
-          participants: [],
-          reserves: [],
-          lastUpdated: serverTimestamp(),
-        }, { merge: true });
-        
-        alert('Partita eliminata');
+        // Elimina la partita dalla collezione activeMatches
+        await deleteDoc(matchRef);
+        alert('Partita eliminata con successo');
+        setCurrentView(VIEW_STATES.MATCH_LIST);
         return;
       }
 
       const sessionRecord = {
-        date: serverTimestamp(),
+        date: new Date(data.date), // Usa la data originale della partita
         participants: data.participants,
         reserves: data.reserves || [],
         participantUids: (data.participants || []).map((p) => p.uid),
@@ -933,25 +928,15 @@ export default function VolleyballApp() {
       
       await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
 
-      // Se la partita è nella collezione activeMatches, eliminala
-      if (selectedMatch?.id) {
-        await deleteDoc(doc(db, 'activeMatches', selectedMatch.id));
-      }
+      // Elimina la partita dalla collezione activeMatches
+      await deleteDoc(matchRef);
 
-      // Clear current session
-      await setDoc(currentSessionRef, {
-        participants: [],
-        reserves: [],
-        lastUpdated: serverTimestamp(),
-        lastSessionId: newSessionRef.id,
-      }, { merge: true });
-
-      alert('Sessione salvata! Le statistiche sono state aggiornate.');
+      alert('Partita completata! Le statistiche sono state aggiornate.');
       if (currentUser) await loadUserStats(currentUser.uid);
       setCurrentView(VIEW_STATES.MATCH_LIST);
     } catch (error) {
-      console.error('Errore durante la chiusura della sessione:', error);
-      alert('Errore durante la chiusura della sessione');
+      console.error('Errore durante la chiusura della partita:', error);
+      alert('Errore durante la chiusura della partita');
     }
   };
 
@@ -1529,7 +1514,7 @@ export default function VolleyballApp() {
                   </button>
                 </div>
                 <button
-                  onClick={handleEndSession}
+                  onClick={handleEndMatch}
                   className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
                 >
                   Partita giocata
