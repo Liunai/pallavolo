@@ -31,7 +31,7 @@ export default function VolleyballSignup() {
   const [sessionDate, setSessionDate] = useState(null);
   const [friends, setFriends] = useState([]);
   const [friendInput, setFriendInput] = useState("");
-  // Rimossa gestione showStats/statistiche
+  const [showStats, setShowStats] = useState(false);
   const [userStats, setUserStats] = useState(null);
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
@@ -382,26 +382,57 @@ export default function VolleyballSignup() {
               </div>
             </div>
             {isLoggedIn && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
-                >
-                  Esci
-                </button>
-              </div>
+              // ...solo icona utente, area personale gestita sotto
             )}
           </div>
 
           {/* HEADER: icona utente in alto a destra */}
           <div className="flex justify-end mb-6">
             {isLoggedIn && (
-              <div className="flex items-center justify-end">
-                <img
-                  src={currentUser.photoURL || ''}
-                  alt={currentUser.displayName || ''}
-                  className="w-10 h-10 rounded-full border-2 border-indigo-500"
-                />
+              <div className="relative">
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
+                  title="Area personale"
+                >
+                  <img
+                    src={currentUser.photoURL || ''}
+                    alt={currentUser.displayName || ''}
+                    className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                  />
+                </button>
+                {showStats && userStats && (
+                  <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10 p-6">
+                    <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
+                      <Award className="w-6 h-6 text-yellow-500" />
+                      Le tue statistiche
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
+                        <div className="text-sm text-gray-400">Sessioni totali</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
+                        <div className="text-sm text-gray-400">Come partecipante</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
+                        <div className="text-sm text-gray-400">Come riserva</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
+                        <div className="text-sm text-gray-400">Amici portati</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="mt-6 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
+                    >
+                      Esci
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
