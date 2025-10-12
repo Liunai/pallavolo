@@ -44,7 +44,6 @@ export default function VolleyballApp() {
 
   // New state management for unified component
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
-  const [availableMatches, setAvailableMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
 
@@ -84,11 +83,12 @@ export default function VolleyballApp() {
     (async () => {
       const snap = await getDoc(currentSessionRef);
       if (!snap.exists()) {
+        // NON creare automaticamente una partita, solo il documento vuoto
         await setDoc(currentSessionRef, {
           participants: [],
           reserves: [],
           lastUpdated: serverTimestamp(),
-          date: getNextTuesday(),
+          // date: getNextTuesday(), // RIMOSSO: Non creare partita automaticamente
         });
       }
       
@@ -98,13 +98,11 @@ export default function VolleyballApp() {
         setReserves(Array.isArray(data?.reserves) ? data.reserves : []);
         setSessionDate(data?.date || null);
         
-        // Determine current view based on data - only if not manually set
-        if (currentView !== VIEW_STATES.MATCH_HISTORY) {
+        // Determine current view based on data - only if not manually navigating
+        if (currentView !== VIEW_STATES.MATCH_HISTORY && currentView !== VIEW_STATES.MATCH_DETAIL) {
           if (data?.date) {
-            // Se c'è una partita attiva, mostra la lista partite per default
-            if (currentView === VIEW_STATES.NO_MATCHES) {
-              setCurrentView(VIEW_STATES.MATCH_LIST);
-            }
+            // Se c'è una partita attiva, mostra la lista partite
+            setCurrentView(VIEW_STATES.MATCH_LIST);
             setSelectedMatch(data);
           } else {
             // Se non c'è partita, mostra la vista "nessuna partita"
@@ -116,7 +114,7 @@ export default function VolleyballApp() {
     return () => {
       if (typeof unsub === 'function') unsub();
     };
-  }, [currentSessionRef, currentView]);
+  }, [currentSessionRef]); // RIMOSSA dipendenza da currentView
 
   // Funzione per calcolare la data del martedì successivo alle 20:30
   function getNextTuesday() {
