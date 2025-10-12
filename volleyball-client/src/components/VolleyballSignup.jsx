@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, UserPlus, Clock, Calendar, Award, BarChart3 } from 'lucide-react';
+import { Users, UserPlus, Clock, Calendar, Award } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
@@ -31,7 +31,7 @@ export default function VolleyballSignup() {
   const [sessionDate, setSessionDate] = useState(null);
   const [friends, setFriends] = useState([]);
   const [friendInput, setFriendInput] = useState("");
-  const [showStats, setShowStats] = useState(false);
+  // Rimossa gestione showStats/statistiche
   const [userStats, setUserStats] = useState(null);
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
@@ -148,11 +148,9 @@ export default function VolleyballSignup() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setShowStats(false);
-    setUserStats(null);
+  await signOut(auth);
+  setIsLoggedIn(false);
+  setCurrentUser(null);
   };
 
   const loadUserStats = async (uid) => {
@@ -361,17 +359,15 @@ export default function VolleyballSignup() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-100">Iscrizioni pallavolo</h1>
+                {sessionDate && (
+                  <div className="mt-2 text-lg text-indigo-300 font-semibold">
+                    Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
+                  </div>
+                )}
               </div>
             </div>
             {isLoggedIn && (
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="px-4 py-2 bg-indigo-600 text-gray-100 rounded-lg hover:bg-indigo-700 transition border border-indigo-500 flex items-center gap-2"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  Statistiche
-                </button>
                 <button
                   onClick={handleLogout}
                   className="px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
@@ -385,50 +381,12 @@ export default function VolleyballSignup() {
           {/* HEADER: icona utente in alto a destra */}
           <div className="flex justify-end mb-6">
             {isLoggedIn && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
-                  title="Area personale"
-                >
-                  <img
-                    src={currentUser.photoURL || ''}
-                    alt={currentUser.displayName || ''}
-                    className="w-10 h-10 rounded-full border-2 border-indigo-500"
-                  />
-                </button>
-                {showStats && userStats && (
-                  <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10 p-6">
-                    <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
-                      <Award className="w-6 h-6 text-yellow-500" />
-                      Le tue statistiche
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                        <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
-                        <div className="text-sm text-gray-400">Sessioni totali</div>
-                      </div>
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                        <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
-                        <div className="text-sm text-gray-400">Come partecipante</div>
-                      </div>
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                        <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
-                        <div className="text-sm text-gray-400">Come riserva</div>
-                      </div>
-                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                        <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
-                        <div className="text-sm text-gray-400">Amici portati</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleLogout}
-                      className="mt-6 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
-                    >
-                      Esci
-                    </button>
-                  </div>
-                )}
+              <div className="flex items-center justify-end">
+                <img
+                  src={currentUser.photoURL || ''}
+                  alt={currentUser.displayName || ''}
+                  className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                />
               </div>
             )}
           </div>
@@ -525,12 +483,7 @@ export default function VolleyballSignup() {
                     </div>
                   )}
                   {isUserSignedUp() && (
-                    <button
-                      onClick={handleUnsubscribe}
-                      className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
-                    >
-                      Disiscriviti
-                    </button>
+                    {/* Pulsante disiscrizione rimosso da qui, rimane solo in cima */}
                   )}
                   {/* Liste partecipanti/riserve */}
                   <div className="grid md:grid-cols-2 gap-6 mt-8">
@@ -628,32 +581,7 @@ export default function VolleyballSignup() {
             </div>
           )}
 
-              {showStats && userStats && (
-                <div className="bg-gray-700 rounded-lg p-6 border border-gray-600">
-                  <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
-                    <Award className="w-6 h-6 text-yellow-500" />
-                    Le tue statistiche
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                      <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
-                      <div className="text-sm text-gray-400">Sessioni totali</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                      <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
-                      <div className="text-sm text-gray-400">Come partecipante</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                      <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
-                      <div className="text-sm text-gray-400">Come riserva</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                      <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
-                      <div className="text-sm text-gray-400">Amici portati</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Rimossa area statistiche personale */}
 
 
               {!isUserSignedUp() && (
