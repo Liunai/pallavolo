@@ -179,12 +179,13 @@ export default function VolleyballApp() {
           }));
           setActiveMatches(matches);
           
-          // Update view based on active matches
+          // Update view based on active matches, but preserve MATCH_DETAIL view
           if (currentView === VIEW_STATES.NO_MATCHES && matches.length > 0) {
             setCurrentView(VIEW_STATES.MATCH_LIST);
           } else if (currentView === VIEW_STATES.MATCH_LIST && matches.length === 0) {
             setCurrentView(VIEW_STATES.NO_MATCHES);
           }
+          // Non cambiare vista se siamo in MATCH_DETAIL per mantenere la vista dopo iscrizione/disiscrizione
         });
         
         return unsubscribe;
@@ -504,6 +505,59 @@ export default function VolleyballApp() {
     }
   };
 
+  const handleCloseMatch = async (match) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler chiudere questa partita? Verrà salvata nello storico e rimossa dalle partite attive.');
+    if (!confirmed) return;
+
+    try {
+      const participants = match.participants || [];
+      const reserves = match.reserves || [];
+      
+      // Se ci sono partecipanti, salva la sessione
+      if (participants.length > 0) {
+        const sessionRecord = {
+          date: new Date(match.date),
+          participants: participants,
+          reserves: reserves,
+          participantUids: participants.map((p) => p.uid),
+          reserveUids: reserves.map((r) => r.uid),
+        };
+
+        await addDoc(collection(db, 'sessions'), sessionRecord);
+
+        // Aggiorna le statistiche dei partecipanti
+        const participantUpdates = participants.map((p) =>
+          updateDoc(doc(db, 'users', p.uid), {
+            'stats.totalSessions': increment(1),
+            'stats.asParticipant': increment(1),
+            'stats.friendsBrought': increment(p.friends?.length || 0),
+          })
+        );
+        
+        // Aggiorna le statistiche delle riserve
+        const reserveUpdates = reserves.map((r) =>
+          updateDoc(doc(db, 'users', r.uid), {
+            'stats.asReserve': increment(1),
+            'stats.friendsBrought': increment(r.friends?.length || 0),
+          })
+        );
+        
+        await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
+      }
+
+      // Rimuovi la partita dalle partite attive
+      await deleteDoc(doc(db, 'activeMatches', match.id));
+      
+      alert(participants.length > 0 ? 'Partita chiusa e salvata nello storico!' : 'Partita chiusa!');
+      
+    } catch (error) {
+      console.error('Errore nella chiusura della partita:', error);
+      alert('Errore nella chiusura della partita');
+    }
+  };
+
   const loadUserStats = async (uid) => {
     const userSnap = await getDoc(doc(db, 'users', uid));
     const user = userSnap.exists() ? userSnap.data() : {};
@@ -665,9 +719,19 @@ export default function VolleyballApp() {
         if (asReserve) {
           updated.reserves = [...updated.reserves, newEntry];
         } else {
-          if (updated.participants.length < MAX_PARTICIPANTS) {
+          // Calcola il totale attuale di partecipanti + amici
+          let currentTotal = updated.participants.length;
+          for (const p of updated.participants) {
+            currentTotal += (p.friends?.length || 0);
+          }
+          
+          // Calcola il totale che avremmo aggiungendo questo nuovo partecipante
+          const newTotal = currentTotal + 1 + (friends.length || 0);
+          
+          if (newTotal <= MAX_PARTICIPANTS) {
             updated.participants = [...updated.participants, newEntry];
           } else {
+            // Se il totale supererebbe 14, aggiunge alle riserve
             updated.reserves = [...updated.reserves, newEntry];
           }
         }
@@ -682,8 +746,10 @@ export default function VolleyballApp() {
       setFriends([]);
       await loadUserStats(currentUser.uid);
 
-      if (!asReserve && (selectedMatch.participants?.length || 0) >= MAX_PARTICIPANTS) {
-        alert('Lista partecipanti piena! Sei stato aggiunto alle riserve.');
+      // Controlla se è stato aggiunto alle riserve invece che ai partecipanti
+      const totalAfterSignup = getTotalCount();
+      if (!asReserve && totalAfterSignup > MAX_PARTICIPANTS) {
+        alert(`Lista partecipanti piena (${MAX_PARTICIPANTS} posti)! Sei stato aggiunto alle riserve.`);
       }
     } catch (e) {
       alert(e.message || 'Errore durante l\'iscrizione');
@@ -813,8 +879,28 @@ export default function VolleyballApp() {
     try {
       const snap = await getDoc(currentSessionRef);
       const data = snap.data() || { participants: [], reserves: [] };
+      
+      // Se non ci sono partecipanti, chiedi conferma per eliminare la partita
       if (!data.participants || data.participants.length === 0) {
-        alert('Non ci sono partecipanti da salvare!');
+        const confirmed = confirm('Non ci sono partecipanti in questa partita. Vuoi eliminarla?');
+        if (!confirmed) return;
+        
+        // Elimina la partita dalla collezione activeMatches se esiste
+        if (selectedMatch?.id) {
+          await deleteDoc(doc(db, 'activeMatches', selectedMatch.id));
+          alert('Partita eliminata con successo');
+          setCurrentView(VIEW_STATES.MATCH_LIST);
+          return;
+        }
+        
+        // Altrimenti pulisci solo la sessione corrente
+        await setDoc(currentSessionRef, {
+          participants: [],
+          reserves: [],
+          lastUpdated: serverTimestamp(),
+        }, { merge: true });
+        
+        alert('Partita eliminata');
         return;
       }
 
@@ -847,6 +933,11 @@ export default function VolleyballApp() {
       
       await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
 
+      // Se la partita è nella collezione activeMatches, eliminala
+      if (selectedMatch?.id) {
+        await deleteDoc(doc(db, 'activeMatches', selectedMatch.id));
+      }
+
       // Clear current session
       await setDoc(currentSessionRef, {
         participants: [],
@@ -857,7 +948,9 @@ export default function VolleyballApp() {
 
       alert('Sessione salvata! Le statistiche sono state aggiornate.');
       if (currentUser) await loadUserStats(currentUser.uid);
-    } catch {
+      setCurrentView(VIEW_STATES.MATCH_LIST);
+    } catch (error) {
+      console.error('Errore durante la chiusura della sessione:', error);
       alert('Errore durante la chiusura della sessione');
     }
   };
@@ -878,8 +971,18 @@ export default function VolleyballApp() {
             </h1>
             {/* Subtitle visible only for logged users */}
             {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
-              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">
-                Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
+              <div className="mt-1 md:mt-2 flex items-center gap-3 flex-wrap">
+                <div className="text-sm md:text-lg text-indigo-300 font-semibold">
+                  Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
+                </div>
+                {/* Tag stato partita */}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  selectedMatch && activeMatches.some(match => match.id === selectedMatch.id)
+                    ? 'bg-green-600 text-green-100' 
+                    : 'bg-gray-600 text-gray-100'
+                }`}>
+                  {selectedMatch && activeMatches.some(match => match.id === selectedMatch.id) ? 'Aperta' : 'Giocata'}
+                </span>
               </div>
             ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Partite già giocate</div>
@@ -1065,18 +1168,31 @@ export default function VolleyballApp() {
                       <div className="text-xs text-gray-400">Riserve</div>
                     </div>
                     {isAdmin && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteActiveMatch(match.id);
-                        }}
-                        className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
-                        title="Elimina partita"
-                      >
-                        <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Funzione per chiudere la partita (marcarla come giocata)
+                            handleCloseMatch(match);
+                          }}
+                          className="p-1 md:p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
+                          title="Chiudi partita (marca come giocata)"
+                        >
+                          <Calendar className="w-4 h-4 md:w-5 md:h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteActiveMatch(match.id);
+                          }}
+                          className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                          title="Elimina partita"
+                        >
+                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1182,6 +1298,17 @@ export default function VolleyballApp() {
                   </button>
                 </div>
                 <div className="space-y-4">
+                  {/* Avviso se lista partecipanti piena */}
+                  {getTotalCount() >= MAX_PARTICIPANTS && (
+                    <div className="p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
+                      <p className="text-amber-300 text-sm font-medium">
+                        ⚠️ Lista partecipanti piena ({MAX_PARTICIPANTS}/{MAX_PARTICIPANTS})
+                      </p>
+                      <p className="text-amber-200 text-xs mt-1">
+                        Le nuove iscrizioni come partecipante verranno automaticamente aggiunte alle riserve.
+                      </p>
+                    </div>
+                  )}
                   <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">3 amici</span> per sessione</div>
                   <div className="flex gap-2 items-center">
                     <input
