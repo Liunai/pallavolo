@@ -374,13 +374,63 @@ export default function VolleyballSignup() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-100">Iscrizioni pallavolo</h1>
-                {sessionDate && (
+                {sessionDate ? (
                   <div className="mt-2 text-lg text-indigo-300 font-semibold">
                     Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
                   </div>
+                ) : (
+                  <div className="mt-2 text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
                 )}
               </div>
             </div>
+            {/* Icona utente sempre visibile */}
+            {isLoggedIn && (
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
+                  title="Area personale"
+                >
+                  <img
+                    src={currentUser.photoURL || ''}
+                    alt={currentUser.displayName || ''}
+                    className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                  />
+                </button>
+                {showStats && userStats && (
+                  <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10 p-6">
+                    <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
+                      <Award className="w-6 h-6 text-yellow-500" />
+                      Le tue statistiche
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
+                        <div className="text-sm text-gray-400">Sessioni totali</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
+                        <div className="text-sm text-gray-400">Come partecipante</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
+                        <div className="text-sm text-gray-400">Come riserva</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
+                        <div className="text-sm text-gray-400">Amici portati</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="mt-6 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
+                    >
+                      Esci
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* HEADER: icona utente in alto a destra */}
