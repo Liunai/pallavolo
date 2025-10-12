@@ -29,7 +29,9 @@ if (useEmulator) {
   try {
     connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
     connectFirestoreEmulator(db, 'localhost', 8080);
-  } catch {}
+  } catch {
+    // ignore emulator connection errors in production build
+  }
 }
 
 const provider = new GoogleAuthProvider();
