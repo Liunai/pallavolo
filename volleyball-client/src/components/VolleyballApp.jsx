@@ -1420,164 +1420,6 @@ export default function VolleyballApp() {
                 Disiscriviti
               </button>
             )}
-            {/* Liste partecipanti/riserve */}
-            <div className="grid md:grid-cols-2 gap-6 mt-8">
-              <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
-                  <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
-                    {getTotalCount()} / {MAX_PARTICIPANTS}
-                  </span>
-                </div>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {!selectedMatch || !selectedMatch.participants || selectedMatch.participants.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
-                  ) : (
-                    selectedMatch.participants.map((participant, index) => (
-                      <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={participant.photoURL}
-                            alt={participant.name}
-                            className="w-10 h-10 rounded-full border-2 border-green-500"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-gray-100">{participant.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400">{participant.timestamp}</span>
-                                <button
-                                  onClick={() => loadOtherUserStats(participant.uid, participant.name)}
-                                  className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
-                                  title="Visualizza statistiche"
-                                >
-                                  📊
-                                </button>
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => handleAdminRemoveUser(participant.uid, false)}
-                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                    title="Rimuovi utente"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            {participant.friends?.length > 0 && (
-                              <div className="mt-2 space-y-1">
-                                {participant.friends.map((friend, fIndex) => (
-                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-green-400">+</span>
-                                      {friend}
-                                    </div>
-                                    {isAdmin && (
-                                      <button
-                                        onClick={() => handleAdminRemoveFriend(participant.uid, fIndex, false)}
-                                        className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
-                                        title="Rimuovi amico"
-                                      >
-                                        ✕
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-              
-              {/* Sezione Riserve - nascosta per partite storiche */}
-              {!isHistoricalMatch && (
-                <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
-                    <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
-                      {getReservesTotalCount()}
-                    </span>
-                  </div>
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
-                    ) : (
-                      selectedMatch.reserves.map((reserve, index) => (
-                        <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={reserve.photoURL}
-                              alt={reserve.name}
-                              className="w-10 h-10 rounded-full border-2 border-amber-500"
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-gray-100">
-                                  {index + 1}. {reserve.name}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400">{reserve.timestamp}</span>
-                                  <button
-                                    onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
-                                    className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
-                                    title="Visualizza statistiche"
-                                  >
-                                    📊
-                                  </button>
-                                  {isAdmin && (
-                                    <>
-                                      <button
-                                        onClick={() => handlePromoteReserve(reserve.uid)}
-                                        className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
-                                        title="Promuovi a partecipante"
-                                      >
-                                        ⬆️
-                                      </button>
-                                      <button
-                                        onClick={() => handleAdminRemoveUser(reserve.uid, true)}
-                                        className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                        title="Rimuovi utente"
-                                      >
-                                        ✕
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              {reserve.friends?.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {reserve.friends.map((friend, fIndex) => (
-                                    <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-amber-400">+</span>
-                                        {friend}
-                                      </div>
-                                      {isAdmin && (
-                                        <button
-                                          onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
-                                          className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
-                                          title="Rimuovi amico"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
             {/* Area admin per super-admin */}
             {isAdmin && (
               <div className="space-y-4 mt-6">
@@ -1608,6 +1450,165 @@ export default function VolleyballApp() {
             )}
           </>
         )}
+        
+        {/* Liste partecipanti/riserve - sempre visibili */}
+        <div className="grid md:grid-cols-2 gap-6 mt-8">
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
+              <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
+                {getTotalCount()} / {MAX_PARTICIPANTS}
+              </span>
+            </div>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {!selectedMatch || !selectedMatch.participants || selectedMatch.participants.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
+              ) : (
+                selectedMatch.participants.map((participant, index) => (
+                  <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={participant.photoURL}
+                        alt={participant.name}
+                        className="w-10 h-10 rounded-full border-2 border-green-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-100">{participant.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">{participant.timestamp}</span>
+                            <button
+                              onClick={() => loadOtherUserStats(participant.uid, participant.name)}
+                              className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                              title="Visualizza statistiche"
+                            >
+                              📊
+                            </button>
+                            {isAdmin && !isHistoricalMatch && (
+                              <button
+                                onClick={() => handleAdminRemoveUser(participant.uid, false)}
+                                className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                title="Rimuovi utente"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {participant.friends?.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {participant.friends.map((friend, fIndex) => (
+                              <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-400">+</span>
+                                  {friend}
+                                </div>
+                                {isAdmin && !isHistoricalMatch && (
+                                  <button
+                                    onClick={() => handleAdminRemoveFriend(participant.uid, fIndex, false)}
+                                    className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                    title="Rimuovi amico"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          
+          {/* Sezione Riserve - nascosta per partite storiche */}
+          {!isHistoricalMatch && (
+            <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
+                <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
+                  {getReservesTotalCount()}
+                </span>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
+                ) : (
+                  selectedMatch.reserves.map((reserve, index) => (
+                    <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={reserve.photoURL}
+                          alt={reserve.name}
+                          className="w-10 h-10 rounded-full border-2 border-amber-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-100">
+                              {index + 1}. {reserve.name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                              <button
+                                onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
+                                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                title="Visualizza statistiche"
+                              >
+                                📊
+                              </button>
+                              {isAdmin && (
+                                <>
+                                  <button
+                                    onClick={() => handlePromoteReserve(reserve.uid)}
+                                    className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                    title="Promuovi a partecipante"
+                                  >
+                                    ⬆️
+                                  </button>
+                                  <button
+                                    onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                    title="Rimuovi utente"
+                                  >
+                                    ✕
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {reserve.friends?.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {reserve.friends.map((friend, fIndex) => (
+                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-amber-400">+</span>
+                                    {friend}
+                                  </div>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
+                                      className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                      title="Rimuovi amico"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1673,7 +1674,12 @@ export default function VolleyballApp() {
                     className="flex-1 cursor-pointer"
                   >
                     <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
-                      Partita #{matchHistory.length - index}
+                      {session.date?.toDate ? session.date.toDate().toLocaleDateString('it-IT', { 
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      }) : 'Partita'}
                     </h3>
                     <p className="text-sm md:text-base text-gray-400 mt-1">
                       {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT', { 
