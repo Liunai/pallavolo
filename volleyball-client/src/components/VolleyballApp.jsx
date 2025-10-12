@@ -631,7 +631,18 @@ export default function VolleyballApp() {
       }
 
       // Rimuovi la partita dalle partite attive
+      console.log('Rimuovendo partita con ID:', match.id);
       await deleteDoc(doc(db, 'activeMatches', match.id));
+      console.log('Partita rimossa con successo dal database');
+      
+      // Forza refresh delle liste per sicurezza
+      await loadMatchHistory();
+      
+      // Se stavi visualizzando questa partita, torna alla home
+      if (selectedMatch && selectedMatch.id === match.id) {
+        setSelectedMatch(null);
+        setCurrentView(VIEW_STATES.HOME);
+      }
       
       alert(participants.length > 0 ? 'Partita chiusa e salvata nello storico!' : 'Partita chiusa!');
       
