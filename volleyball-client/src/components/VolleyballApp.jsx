@@ -1491,87 +1491,91 @@ export default function VolleyballApp() {
                   )}
                 </div>
               </div>
-              <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
-                  <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
-                    {getReservesTotalCount()}
-                  </span>
-                </div>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
-                  ) : (
-                    selectedMatch.reserves.map((reserve, index) => (
-                      <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={reserve.photoURL}
-                            alt={reserve.name}
-                            className="w-10 h-10 rounded-full border-2 border-amber-500"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-gray-100">
-                                {index + 1}. {reserve.name}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400">{reserve.timestamp}</span>
-                                <button
-                                  onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
-                                  className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
-                                  title="Visualizza statistiche"
-                                >
-                                  📊
-                                </button>
-                                {isAdmin && (
-                                  <>
-                                    <button
-                                      onClick={() => handlePromoteReserve(reserve.uid)}
-                                      className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
-                                      title="Promuovi a partecipante"
-                                    >
-                                      ⬆️
-                                    </button>
-                                    <button
-                                      onClick={() => handleAdminRemoveUser(reserve.uid, true)}
-                                      className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                      title="Rimuovi utente"
-                                    >
-                                      ✕
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            {reserve.friends?.length > 0 && (
-                              <div className="mt-2 space-y-1">
-                                {reserve.friends.map((friend, fIndex) => (
-                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-amber-400">+</span>
-                                      {friend}
-                                    </div>
-                                    {isAdmin && (
+              
+              {/* Sezione Riserve - nascosta per partite storiche */}
+              {!isHistoricalMatch && (
+                <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
+                    <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
+                      {getReservesTotalCount()}
+                    </span>
+                  </div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
+                      <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
+                    ) : (
+                      selectedMatch.reserves.map((reserve, index) => (
+                        <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={reserve.photoURL}
+                              alt={reserve.name}
+                              className="w-10 h-10 rounded-full border-2 border-amber-500"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-gray-100">
+                                  {index + 1}. {reserve.name}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                                  <button
+                                    onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
+                                    className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                    title="Visualizza statistiche"
+                                  >
+                                    📊
+                                  </button>
+                                  {isAdmin && (
+                                    <>
                                       <button
-                                        onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
-                                        className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
-                                        title="Rimuovi amico"
+                                        onClick={() => handlePromoteReserve(reserve.uid)}
+                                        className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                        title="Promuovi a partecipante"
+                                      >
+                                        ⬆️
+                                      </button>
+                                      <button
+                                        onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                        className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                        title="Rimuovi utente"
                                       >
                                         ✕
                                       </button>
-                                    )}
-                                  </div>
-                                ))}
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            )}
+                              {reserve.friends?.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                  {reserve.friends.map((friend, fIndex) => (
+                                    <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-amber-400">+</span>
+                                        {friend}
+                                      </div>
+                                      {isAdmin && (
+                                        <button
+                                          onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
+                                          className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                          title="Rimuovi amico"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             {/* Area admin per super-admin */}
             {isAdmin && (
@@ -1814,8 +1818,8 @@ export default function VolleyballApp() {
                     </div>
                     
                     <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-                      {/* Role badge - only show to super-admin, but hide super admin role */}
-                      {isSuperAdmin && (
+                      {/* Role badge - show to all admins, but hide super admin role */}
+                      {isAdmin && (
                         <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium ${
                           user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
                           user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
@@ -1826,8 +1830,8 @@ export default function VolleyballApp() {
                         </span>
                       )}
                       
-                      {/* Role change buttons - only for super-admin */}
-                      {isSuperAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
+                      {/* Role change buttons - admins can promote to admin, only super-admin can demote admins */}
+                      {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
                         <div className="flex gap-1 md:gap-2">
                           {user.role !== 'admin' && (
                             <button
@@ -1837,7 +1841,7 @@ export default function VolleyballApp() {
                               Rendi Admin
                             </button>
                           )}
-                          {user.role === 'admin' && (
+                          {user.role === 'admin' && isSuperAdmin && (
                             <button
                               onClick={() => handleChangeUserRole(user.id, 'user')}
                               className="px-2 md:px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
@@ -1889,7 +1893,7 @@ export default function VolleyballApp() {
             <button
               onClick={() => setCurrentView(activeMatches.length > 0 ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
               className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
-                (currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) 
+                (currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST) 
                 ? 'bg-indigo-600 text-white' 
                 : 'text-gray-400 hover:text-gray-200'
               }`}
@@ -1898,6 +1902,24 @@ export default function VolleyballApp() {
               <Home className="w-5 h-5 md:w-6 md:h-6" />
               <span className="text-xs">Partite</span>
             </button>
+            
+            {/* Current Match - solo se abbiamo una partita selezionata */}
+            {selectedMatch && (
+              <button
+                onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+                className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
+                  currentView === VIEW_STATES.MATCH_DETAIL 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Partita Corrente"
+              >
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                <span className="text-xs">Partita</span>
+              </button>
+            )}
             
             {/* History */}
             <button
