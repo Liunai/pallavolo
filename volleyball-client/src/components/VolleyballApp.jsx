@@ -943,6 +943,55 @@ export default function VolleyballApp() {
     }
   };
 
+  // Promuovi riserva a partecipante (solo admin)
+  const handlePromoteReserve = async (reserveUid) => {
+    if (!isAdmin || !selectedMatch) return;
+    
+    try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        // Trova la riserva da promuovere
+        const reserveIndex = data.reserves?.findIndex((r) => r.uid === reserveUid);
+        if (reserveIndex === -1) {
+          throw new Error('Riserva non trovata');
+        }
+        
+        const reserveToPromote = data.reserves[reserveIndex];
+        
+        // Calcola se c'è spazio nei partecipanti
+        let currentTotal = data.participants?.length || 0;
+        for (const p of (data.participants || [])) {
+          currentTotal += (p.friends?.length || 0);
+        }
+        const newTotal = currentTotal + 1 + (reserveToPromote.friends?.length || 0);
+        
+        if (newTotal > MAX_PARTICIPANTS) {
+          throw new Error(`Non c'è abbastanza spazio. Servono ${newTotal - currentTotal} posti ma ne rimangono solo ${MAX_PARTICIPANTS - currentTotal}.`);
+        }
+        
+        // Rimuovi dalle riserve e aggiungi ai partecipanti
+        const newReserves = [...(data.reserves || [])];
+        newReserves.splice(reserveIndex, 1);
+        
+        const newParticipants = [...(data.participants || []), reserveToPromote];
+        
+        transaction.update(matchRef, {
+          participants: newParticipants,
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+        });
+      });
+      
+      alert('Riserva promossa a partecipante con successo!');
+    } catch (error) {
+      console.error('Errore nella promozione:', error);
+      alert(error.message || 'Errore nella promozione della riserva');
+    }
+  };
+
   // Render header (consistent across all views)
   const renderHeader = () => (
     <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 mb-6 border border-gray-700">
@@ -1049,17 +1098,13 @@ export default function VolleyballApp() {
                 <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
                     <div className="text-lg md:text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
-                    <div className="text-xs text-gray-400">Sessioni totali</div>
+                    <div className="text-xs text-gray-400">Partite totali</div>
                   </div>
                   <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
                     <div className="text-lg md:text-xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
                     <div className="text-xs text-gray-400">Come partecipante</div>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
-                    <div className="text-lg md:text-xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
-                    <div className="text-xs text-gray-400">Come riserva</div>
-                  </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50 col-span-2">
                     <div className="text-xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
                     <div className="text-xs text-gray-400">Amici portati</div>
                   </div>
@@ -1472,13 +1517,22 @@ export default function VolleyballApp() {
                                   📊
                                 </button>
                                 {isAdmin && (
-                                  <button
-                                    onClick={() => handleAdminRemoveUser(reserve.uid, true)}
-                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                    title="Rimuovi utente"
-                                  >
-                                    ✕
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => handlePromoteReserve(reserve.uid)}
+                                      className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                      title="Promuovi a partecipante"
+                                    >
+                                      ⬆️
+                                    </button>
+                                    <button
+                                      onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                      className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                      title="Rimuovi utente"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1915,17 +1969,13 @@ export default function VolleyballApp() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
                   <div className="text-xl font-bold text-indigo-400">{selectedUserStats.totalSessions || 0}</div>
-                  <div className="text-xs text-gray-400">Sessioni totali</div>
+                  <div className="text-xs text-gray-400">Partite totali</div>
                 </div>
                 <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
                   <div className="text-xl font-bold text-green-400">{selectedUserStats.asParticipant || 0}</div>
                   <div className="text-xs text-gray-400">Come partecipante</div>
                 </div>
-                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                  <div className="text-xl font-bold text-amber-400">{selectedUserStats.asReserve || 0}</div>
-                  <div className="text-xs text-gray-400">Come riserva</div>
-                </div>
-                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50 col-span-2">
                   <div className="text-xl font-bold text-purple-400">{selectedUserStats.friendsBrought || 0}</div>
                   <div className="text-xs text-gray-400">Amici portati</div>
                 </div>
