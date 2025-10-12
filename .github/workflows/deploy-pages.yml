@@ -19,9 +19,11 @@ jobs:
         run: npm install --prefix volleyball-client
       - name: Build project
         run: npm run build --prefix volleyball-client
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-main@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./volleyball-client/dist
-          publish_branch: main
+      - name: Deploy build to main branch
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          cp -r ./volleyball-client/dist/* ./volleyball-client/
+          git add ./volleyball-client/*
+          git commit -m "Deploy build [skip ci]" || echo "No changes to commit"
+          git push origin main
