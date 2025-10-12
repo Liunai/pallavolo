@@ -683,6 +683,16 @@ export default function VolleyballApp() {
     );
   };
 
+  const isUserParticipant = () => {
+    if (!selectedMatch) return false;
+    return selectedMatch.participants?.some((p) => p.uid === currentUser?.uid);
+  };
+
+  const isUserReserve = () => {
+    if (!selectedMatch) return false;
+    return selectedMatch.reserves?.some((r) => r.uid === currentUser?.uid);
+  };
+
   // Non permettere iscrizione se non esiste una partita selezionata
   // Distingue tra partite attive (si può iscrivere) e storiche (solo visualizzazione)
   const canSignup = !!selectedMatch && activeMatches.some(match => match.id === selectedMatch.id);
@@ -712,8 +722,46 @@ export default function VolleyballApp() {
         const data = snap.data() || { participants: [], reserves: [] };
         const alreadyParticipant = data.participants?.some((p) => p.uid === currentUser.uid);
         const alreadyReserve = data.reserves?.some((r) => r.uid === currentUser.uid);
-        if (alreadyParticipant || alreadyReserve) {
-          throw new Error('Sei già iscritto!');
+        
+        // Se già iscritto come riserva, blocca completamente
+        if (alreadyReserve) {
+          throw new Error('Sei già iscritto come riserva!');
+        }
+        
+        // Se già partecipante, permetti solo aggiunta di amici
+        if (alreadyParticipant) {
+          if (friends.length === 0) {
+            throw new Error('Sei già iscritto come partecipante!');
+          }
+          
+          // Calcola se c'è spazio per i nuovi amici
+          let currentTotal = data.participants.length;
+          for (const p of data.participants) {
+            currentTotal += (p.friends?.length || 0);
+          }
+          
+          const newTotal = currentTotal + friends.length;
+          if (newTotal > MAX_PARTICIPANTS) {
+            throw new Error(`Non ci sono abbastanza posti per tutti i +1, rimuoverne qualcuno e riprovare (posti disponibili: ${MAX_PARTICIPANTS - currentTotal})`);
+          }
+          
+          // Aggiorna l'iscrizione esistente con i nuovi amici
+          const updated = { ...data };
+          updated.participants = updated.participants.map(p => 
+            p.uid === currentUser.uid 
+              ? { ...p, friends: [...(p.friends || []), ...friends], timestamp: new Date().toLocaleString('it-IT') }
+              : p
+          );
+          
+          transaction.update(matchRef, {
+            participants: updated.participants,
+            lastUpdated: serverTimestamp(),
+          });
+          
+          setFriends([]);
+          await loadUserStats(currentUser.uid);
+          alert(`${friends.length} amici aggiunti con successo!`);
+          return;
         }
 
         const newEntry = {
@@ -743,8 +791,9 @@ export default function VolleyballApp() {
           if (newTotal <= MAX_PARTICIPANTS) {
             updated.participants = [...updated.participants, newEntry];
           } else {
-            // Se il totale supererebbe 14, aggiunge alle riserve
-            updated.reserves = [...updated.reserves, newEntry];
+            // Blocca l'iscrizione con messaggio di errore invece di mettere in riserva
+            const availableSpots = MAX_PARTICIPANTS - currentTotal;
+            throw new Error(`Non ci sono abbastanza posti per tutti i +1, rimuoverne qualcuno e riprovare (posti disponibili: ${availableSpots})`);
           }
         }
 
@@ -1351,17 +1400,6 @@ export default function VolleyballApp() {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {/* Avviso se lista partecipanti piena */}
-                  {getTotalCount() >= MAX_PARTICIPANTS && (
-                    <div className="p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
-                      <p className="text-amber-300 text-sm font-medium">
-                        ⚠️ Lista partecipanti piena ({MAX_PARTICIPANTS}/{MAX_PARTICIPANTS})
-                      </p>
-                      <p className="text-amber-200 text-xs mt-1">
-                        Le nuove iscrizioni come partecipante verranno automaticamente aggiunte alle riserve.
-                      </p>
-                    </div>
-                  )}
                   <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">{isAdmin ? 'illimitati' : '3'} amici</span> per sessione</div>
                   <div className="flex gap-2 items-center">
                     <input
@@ -1408,6 +1446,83 @@ export default function VolleyballApp() {
                 </div>
               </div>
             )}
+            
+            {/* Sezione per aggiungere amici se già partecipante */}
+            {isUserParticipant() && (
+              <div className="space-y-4">
+                <div className="p-3 bg-green-900/20 border border-green-600 rounded-lg">
+                  <p className="text-green-300 text-sm font-medium">
+                    ✅ Sei già iscritto come partecipante
+                  </p>
+                  <p className="text-green-200 text-xs mt-1">
+                    Puoi comunque aggiungere amici alla tua iscrizione
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">{isAdmin ? 'illimitati' : '3'} amici</span> per sessione</div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={friendInput || ''}
+                      onChange={e => setFriendInput(e.target.value)}
+                      className="px-4 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Nome amico"
+                      disabled={!isAdmin && friends.length >= 3}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (friendInput && (isAdmin || friends.length < 3)) {
+                          setFriends([...friends, friendInput]);
+                          setFriendInput('');
+                        }
+                      }}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                      disabled={!friendInput || (!isAdmin && friends.length >= 3)}
+                    >
+                      Aggiungi amico
+                    </button>
+                  </div>
+                  {friends.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-sm text-gray-300 mb-2">Amici da aggiungere:</div>
+                      <ul className="space-y-2">
+                        {friends.map((name, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span className="bg-indigo-900 text-indigo-100 px-3 py-1 rounded-full">{name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setFriends(friends.filter((_, i) => i !== idx))}
+                              className="text-red-400 hover:text-red-600 text-xs"
+                            >
+                              Rimuovi
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        onClick={() => handleSignup(false)}
+                        className="w-full mt-3 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                      >
+                        Aggiungi {friends.length} amici alla mia iscrizione
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {isUserReserve() && (
+              <div className="p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
+                <p className="text-amber-300 text-sm font-medium">
+                  ⏳ Sei iscritto come riserva
+                </p>
+                <p className="text-amber-200 text-xs mt-1">
+                  Non puoi aggiungere amici finché sei in lista riserve
+                </p>
+              </div>
+            )}
+            
             {isUserSignedUp() && (
               <button
                 onClick={handleUnsubscribe}
