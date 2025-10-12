@@ -864,52 +864,52 @@ export default function VolleyballApp() {
 
   // Render header (consistent across all views)
   const renderHeader = () => (
-    <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-6 border border-gray-700">
+    <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 mb-6 border border-gray-700">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-600 p-3 rounded-lg">
-            <div className="w-8 h-8 text-white text-2xl flex items-center justify-center">🏐</div>
+        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+          <div className="bg-indigo-600 p-2 md:p-3 rounded-lg flex-shrink-0">
+            <div className="w-6 h-6 md:w-8 md:h-8 text-white text-lg md:text-2xl flex items-center justify-center">🏐</div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-100">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl md:text-3xl font-bold text-gray-100 truncate">
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
                currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
                'Pallavolo - 7 fighters'}
             </h1>
             {/* Subtitle visible only for logged users */}
             {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
-              <div className="mt-2 text-lg text-indigo-300 font-semibold">
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">
                 Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
               </div>
             ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
-              <div className="mt-2 text-lg text-indigo-300 font-semibold">Partite già giocate</div>
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Partite già giocate</div>
             ) : currentView === VIEW_STATES.USERS_LIST ? (
-              <div className="mt-2 text-lg text-indigo-300 font-semibold">Gestisci ruoli e utenti</div>
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Gestisci ruoli e utenti</div>
             ) : currentView === VIEW_STATES.MATCH_LIST && sessionDate ? (
-              <div className="mt-2 text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
-              <div className="mt-2 text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
             ))}
           </div>
         </div>
         
         {/* User icon and name always visible when logged */}
         {isLoggedIn && (
-          <div className="relative flex items-center gap-3 user-dropdown">
-            <span className="text-gray-100 font-medium">{customDisplayName || currentUser?.displayName}</span>
+          <div className="relative flex items-center gap-2 md:gap-3 user-dropdown flex-shrink-0">
+            <span className="hidden md:block text-gray-100 font-medium truncate max-w-32">{customDisplayName || currentUser?.displayName}</span>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
+              className="p-1 md:p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition flex-shrink-0"
               title="Area personale"
             >
               <img
                 src={currentUser.photoURL || ''}
                 alt={currentUser.displayName || ''}
-                className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-indigo-500 object-cover"
               />
             </button>
             {showStats && userStats && (
-              <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-6">
+              <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-4 md:p-6 max-w-[90vw]">
                 <h3 className="text-lg font-bold text-gray-100 mb-4 flex items-center gap-2">
                   <Award className="w-5 h-5 text-yellow-500" />
                   Le tue statistiche
@@ -955,17 +955,17 @@ export default function VolleyballApp() {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                    <div className="text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
                     <div className="text-xs text-gray-400">Sessioni totali</div>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                    <div className="text-xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
                     <div className="text-xs text-gray-400">Come partecipante</div>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                    <div className="text-xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
                     <div className="text-xs text-gray-400">Come riserva</div>
                   </div>
                   <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
@@ -1022,18 +1022,18 @@ export default function VolleyballApp() {
 
   // Render match list view 
   const renderMatchListView = () => (
-    <div className="space-y-6">
-      <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-        <h2 className="text-2xl font-bold text-gray-100 mb-4">Partite Attive</h2>
+    <div className="space-y-4 md:space-y-6">
+      <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Partite Attive</h2>
         
         {activeMatches.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3 md:space-y-4">
             {activeMatches.map((match) => (
               <div 
                 key={match.id}
-                className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 transition group"
+                className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600 hover:border-indigo-500 transition group"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div 
                     onClick={() => {
                       setSelectedMatch(match);
@@ -1041,25 +1041,25 @@ export default function VolleyballApp() {
                     }}
                     className="flex-1 cursor-pointer"
                   >
-                    <h3 className="text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
+                    <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
                       Partita di Pallavolo
                     </h3>
-                    <p className="text-gray-400 mt-1">
+                    <p className="text-sm md:text-base text-gray-400 mt-1">
                       {new Date(match.date).toLocaleString('it-IT', { 
-                        dateStyle: 'full', 
+                        dateStyle: 'short', 
                         timeStyle: 'short' 
                       })}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">
+                      <div className="text-lg md:text-2xl font-bold text-green-400">
                         {(match.participants?.length || 0) + (match.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
                       </div>
                       <div className="text-xs text-gray-400">Partecipanti</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-amber-400">
+                      <div className="text-lg md:text-2xl font-bold text-amber-400">
                         {(match.reserves?.length || 0) + (match.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
                       </div>
                       <div className="text-xs text-gray-400">Riserve</div>
@@ -1070,17 +1070,14 @@ export default function VolleyballApp() {
                           e.stopPropagation();
                           handleDeleteActiveMatch(match.id);
                         }}
-                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                        className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
                         title="Elimina partita"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
                     )}
-                    <div className="text-indigo-400">
-                      <span className="text-sm">Clicca per iscriverti →</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1539,56 +1536,56 @@ export default function VolleyballApp() {
             <p className="text-gray-400">Nessun utente registrato</p>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-            <h2 className="text-2xl font-bold text-gray-100 mb-4">Lista Utenti</h2>
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Lista Utenti</h2>
             
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {allUsers.map((user) => (
-                <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div key={user.id} className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
                       <img
                         src={user.photoURL || ''}
                         alt={user.displayName || ''}
-                        className="w-12 h-12 rounded-full border-2 border-indigo-500"
+                        className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-indigo-500 flex-shrink-0 object-cover"
                       />
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <div className="font-medium text-gray-100">
+                      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 min-w-0 flex-1">
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-100 truncate">
                             {user.customDisplayName || user.displayName}
                           </div>
-                          <div className="text-sm text-gray-400">{user.email}</div>
+                          <div className="text-sm text-gray-400 truncate">{user.email}</div>
                           <div className="text-xs text-gray-500">
                             {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
                           </div>
                         </div>
                         
-                        {/* User statistics - inline */}
-                        <div className="flex gap-3 text-xs">
+                        {/* User statistics - inline for desktop, below for mobile */}
+                        <div className="flex gap-2 md:gap-3 text-xs">
                           <div className="text-center">
                             <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
-                            <div className="text-gray-400">Totali</div>
+                            <div className="text-gray-400">Tot</div>
                           </div>
                           <div className="text-center">
                             <div className="font-bold text-green-400">{user.stats?.asParticipant || 0}</div>
-                            <div className="text-gray-400">Partec.</div>
+                            <div className="text-gray-400">Part</div>
                           </div>
                           <div className="text-center">
                             <div className="font-bold text-amber-400">{user.stats?.asReserve || 0}</div>
-                            <div className="text-gray-400">Riserve</div>
+                            <div className="text-gray-400">Ris</div>
                           </div>
                           <div className="text-center">
                             <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
-                            <div className="text-gray-400">Amici</div>
+                            <div className="text-gray-400">Ami</div>
                           </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
                       {/* Role badge - only show to super-admin, but hide super admin role */}
                       {isSuperAdmin && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium ${
                           user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
                           user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
                           'bg-gray-600 text-gray-200'
@@ -1600,11 +1597,11 @@ export default function VolleyballApp() {
                       
                       {/* Role change buttons - only for super-admin */}
                       {isSuperAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 md:gap-2">
                           {user.role !== 'admin' && (
                             <button
                               onClick={() => handleChangeUserRole(user.id, 'admin')}
-                              className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                              className="px-2 md:px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
                             >
                               Rendi Admin
                             </button>
@@ -1612,7 +1609,7 @@ export default function VolleyballApp() {
                           {user.role === 'admin' && (
                             <button
                               onClick={() => handleChangeUserRole(user.id, 'user')}
-                              className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
+                              className="px-2 md:px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
                             >
                               Rendi Utente
                             </button>
@@ -1623,7 +1620,7 @@ export default function VolleyballApp() {
                       {/* Stats button - available to all admins */}
                       <button
                         onClick={() => loadOtherUserStats(user.id, user.displayName)}
-                        className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                        className="px-2 md:px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
                       >
                         📊 Stats
                       </button>
@@ -1643,20 +1640,20 @@ export default function VolleyballApp() {
     if (!isLoggedIn) return null;
     
     return (
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 z-40">
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-2 md:p-4 z-40">
         <div className="max-w-6xl mx-auto flex justify-center">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             {/* Home/Matches */}
             <button
               onClick={() => setCurrentView(activeMatches.length > 0 ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+              className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
                 (currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) 
                 ? 'bg-indigo-600 text-white' 
                 : 'text-gray-400 hover:text-gray-200'
               }`}
               title="Partite"
             >
-              <Home className="w-6 h-6" />
+              <Home className="w-5 h-5 md:w-6 md:h-6" />
               <span className="text-xs">Partite</span>
             </button>
             
@@ -1666,14 +1663,14 @@ export default function VolleyballApp() {
                 loadMatchHistory();
                 setCurrentView(VIEW_STATES.MATCH_HISTORY);
               }}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+              className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
                 currentView === VIEW_STATES.MATCH_HISTORY 
                 ? 'bg-indigo-600 text-white' 
                 : 'text-gray-400 hover:text-gray-200'
               }`}
               title="Storico"
             >
-              <History className="w-6 h-6" />
+              <History className="w-5 h-5 md:w-6 md:h-6" />
               <span className="text-xs">Storico</span>
             </button>
             
@@ -1683,14 +1680,14 @@ export default function VolleyballApp() {
                 loadAllUsers();
                 setCurrentView(VIEW_STATES.USERS_LIST);
               }}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+              className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
                 currentView === VIEW_STATES.USERS_LIST 
                 ? 'bg-indigo-600 text-white' 
                 : 'text-gray-400 hover:text-gray-200'
               }`}
               title="Utenti"
             >
-              <UserCheck className="w-6 h-6" />
+              <UserCheck className="w-5 h-5 md:w-6 md:h-6" />
               <span className="text-xs">Utenti</span>
             </button>
           </div>
@@ -1701,7 +1698,7 @@ export default function VolleyballApp() {
 
   // Main render function
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-3 md:p-6 pb-24">
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         
