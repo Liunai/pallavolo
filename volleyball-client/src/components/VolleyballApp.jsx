@@ -5,6 +5,7 @@ import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -56,6 +57,7 @@ export default function VolleyballApp() {
   const [userRole, setUserRole] = useState('user'); // user, admin, super-admin
   const [allUsers, setAllUsers] = useState([]);
   const [showUsersModal, setShowUsersModal] = useState(false);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
 
   // New state management for unified component
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
@@ -200,6 +202,20 @@ export default function VolleyballApp() {
     };
   }, [currentView]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showStats && !event.target.closest('.user-dropdown')) {
+        setShowStats(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showStats]);
+
   // Funzione per calcolare la data del martedì successivo alle 20:30
   function getNextTuesday() {
     const today = new Date();
@@ -219,17 +235,27 @@ export default function VolleyballApp() {
 
   // Crea nuova partita (aggiunge alla collezione activeMatches)
   const handleNewSession = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin || isCreatingMatch) return;
     
+    setIsCreatingMatch(true);
     try {
+      // Converti la data da stringa a Date object per il confronto
+      const newDate = new Date(nextSessionDate);
+      
       // Controlla se esiste già una partita nello stesso giorno e ora
       const q = query(
         collection(db, 'activeMatches'),
-        where('date', '==', nextSessionDate)
+        orderBy('date', 'asc')
       );
       const existingMatches = await getDocs(q);
       
-      if (!existingMatches.empty) {
+      // Controlla manualmente le date per evitare problemi di formato
+      const hasConflict = existingMatches.docs.some(doc => {
+        const existingDate = new Date(doc.data().date);
+        return existingDate.getTime() === newDate.getTime();
+      });
+      
+      if (hasConflict) {
         alert('Esiste già una partita per questo giorno e orario!');
         return;
       }
@@ -249,6 +275,8 @@ export default function VolleyballApp() {
     } catch (error) {
       console.error('Errore nella creazione della partita:', error);
       alert('Errore nella creazione della partita');
+    } finally {
+      setIsCreatingMatch(false);
     }
   };
 
@@ -456,6 +484,26 @@ export default function VolleyballApp() {
     }
   };
 
+  // Admin function to delete active match
+  const handleDeleteActiveMatch = async (matchId) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler eliminare questa partita attiva? Tutti i partecipanti iscritti verranno rimossi.');
+    if (!confirmed) return;
+
+    try {
+      const matchRef = doc(db, 'activeMatches', matchId);
+      await deleteDoc(matchRef);
+      
+      alert('Partita eliminata con successo');
+      
+      // La lista delle partite attive si aggiornerà automaticamente tramite l'unsubscribe
+    } catch (error) {
+      console.error('Errore nell\'eliminazione della partita:', error);
+      alert('Errore nell\'eliminazione della partita');
+    }
+  };
+
   const loadUserStats = async (uid) => {
     const userSnap = await getDoc(doc(db, 'users', uid));
     const user = userSnap.exists() ? userSnap.data() : {};
@@ -493,9 +541,9 @@ export default function VolleyballApp() {
     }
   };
 
-  // Function to load all users (admin only)
+  // Function to load all users (accessible to all logged users)
   const loadAllUsers = async () => {
-    if (!isAdmin) return;
+    if (!isLoggedIn) return;
     
     try {
       const q = query(
@@ -820,13 +868,13 @@ export default function VolleyballApp() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-600 p-3 rounded-lg">
-            <Users className="w-8 h-8 text-white" />
+            <div className="w-8 h-8 text-white text-2xl flex items-center justify-center">🏐</div>
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-100">
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
-               currentView === VIEW_STATES.USERS_LIST ? 'Gestione Utenti' : 
-               'Iscrizioni pallavolo'}
+               currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
+               'Pallavolo - 7 fighters'}
             </h1>
             {/* Subtitle visible only for logged users */}
             {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
@@ -847,7 +895,7 @@ export default function VolleyballApp() {
         
         {/* User icon and name always visible when logged */}
         {isLoggedIn && (
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex items-center gap-3 user-dropdown">
             <span className="text-gray-100 font-medium">{customDisplayName || currentUser?.displayName}</span>
             <button
               onClick={() => setShowStats(!showStats)}
@@ -861,7 +909,7 @@ export default function VolleyballApp() {
               />
             </button>
             {showStats && userStats && (
-              <div className="absolute right-0 mt-2 w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-6">
+              <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-6">
                 <h3 className="text-lg font-bold text-gray-100 mb-4 flex items-center gap-2">
                   <Award className="w-5 h-5 text-yellow-500" />
                   Le tue statistiche
@@ -968,27 +1016,6 @@ export default function VolleyballApp() {
             </button>
           </div>
         )}
-        
-        {isAdmin && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-2">
-              <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
-              <input
-                id="nextSessionDate"
-                type="datetime-local"
-                value={nextSessionDate}
-                onChange={e => setNextSessionDate(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <button
-              onClick={handleNewSession}
-              className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
-            >
-              Crea nuova partita
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1004,14 +1031,16 @@ export default function VolleyballApp() {
             {activeMatches.map((match) => (
               <div 
                 key={match.id}
-                onClick={() => {
-                  setSelectedMatch(match);
-                  setCurrentView(VIEW_STATES.MATCH_DETAIL);
-                }}
-                className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 cursor-pointer transition group"
+                className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 transition group"
               >
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div 
+                    onClick={() => {
+                      setSelectedMatch(match);
+                      setCurrentView(VIEW_STATES.MATCH_DETAIL);
+                    }}
+                    className="flex-1 cursor-pointer"
+                  >
                     <h3 className="text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
                       Partita di Pallavolo
                     </h3>
@@ -1035,6 +1064,20 @@ export default function VolleyballApp() {
                       </div>
                       <div className="text-xs text-gray-400">Riserve</div>
                     </div>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteActiveMatch(match.id);
+                        }}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                        title="Elimina partita"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                     <div className="text-indigo-400">
                       <span className="text-sm">Clicca per iscriverti →</span>
                     </div>
@@ -1367,7 +1410,7 @@ export default function VolleyballApp() {
                   onClick={handleEndSession}
                   className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
                 >
-                  Chiudi sessione
+                  Partita giocata
                 </button>
               </div>
             )}
@@ -1489,85 +1532,111 @@ export default function VolleyballApp() {
     </div>
   );
 
-  // Render users list view (admin only)
-  const renderUsersListView = () => (
-    <div className="space-y-6">
-      {allUsers.length === 0 ? (
-        <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
-          <p className="text-gray-400">Nessun utente registrato</p>
-        </div>
-      ) : (
-        <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">Gestione Utenti</h2>
-          
-          <div className="space-y-4">
-            {allUsers.map((user) => (
-              <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={user.photoURL || ''}
-                      alt={user.displayName || ''}
-                      className="w-12 h-12 rounded-full border-2 border-indigo-500"
-                    />
-                    <div>
-                      <div className="font-medium text-gray-100">
-                        {user.customDisplayName || user.displayName}
-                      </div>
-                      <div className="text-sm text-gray-400">{user.email}</div>
-                      <div className="text-xs text-gray-500">
-                        {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
+  // Render users list view (accessible to all logged users)
+  const renderUsersListView = () => {
+    return (
+      <div className="space-y-6">
+        {allUsers.length === 0 ? (
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
+            <p className="text-gray-400">Nessun utente registrato</p>
+          </div>
+        ) : (
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+            <h2 className="text-2xl font-bold text-gray-100 mb-4">Lista Utenti</h2>
+            
+            <div className="space-y-4">
+              {allUsers.map((user) => (
+                <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={user.photoURL || ''}
+                        alt={user.displayName || ''}
+                        className="w-12 h-12 rounded-full border-2 border-indigo-500"
+                      />
+                      <div>
+                        <div className="font-medium text-gray-100">
+                          {user.customDisplayName || user.displayName}
+                        </div>
+                        <div className="text-sm text-gray-400">{user.email}</div>
+                        <div className="text-xs text-gray-500">
+                          {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
+                        </div>
+                        
+                        {/* User statistics */}
+                        <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
+                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                            <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
+                            <div className="text-gray-400">Totali</div>
+                          </div>
+                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                            <div className="font-bold text-green-400">{user.stats?.asParticipant || 0}</div>
+                            <div className="text-gray-400">Partec.</div>
+                          </div>
+                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                            <div className="font-bold text-amber-400">{user.stats?.asReserve || 0}</div>
+                            <div className="text-gray-400">Riserve</div>
+                          </div>
+                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                            <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
+                            <div className="text-gray-400">Amici</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    {/* Role badge */}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      user.email === SUPER_ADMIN_EMAIL ? 'bg-purple-900 text-purple-200' :
-                      user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
-                      'bg-gray-600 text-gray-200'
-                    }`}>
-                      {user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 
-                       user.role === 'admin' ? 'Admin' : 'Utente'}
-                    </span>
                     
-                    {/* Role change buttons (only for non-super-admin users) */}
-                    {user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
-                      <div className="flex gap-2">
-                        {user.role !== 'admin' && (
-                          <button
-                            onClick={() => handleChangeUserRole(user.id, 'admin')}
-                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
-                          >
-                            Rendi Admin
-                          </button>
-                        )}
-                        {user.role === 'admin' && (
-                          <button
-                            onClick={() => handleChangeUserRole(user.id, 'user')}
-                            className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
-                          >
-                            Rendi Utente
-                          </button>
-                        )}
-                        <button
-                          onClick={() => loadOtherUserStats(user.id, user.displayName)}
-                          className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
-                        >
-                          📊 Stats
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {/* Role badge - only show to super-admin */}
+                      {isSuperAdmin && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          user.email === SUPER_ADMIN_EMAIL ? 'bg-purple-900 text-purple-200' :
+                          user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
+                          'bg-gray-600 text-gray-200'
+                        }`}>
+                          {user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 
+                           user.role === 'admin' ? 'Admin' : 'Utente'}
+                        </span>
+                      )}
+                      
+                      {/* Role change buttons - only for super-admin */}
+                      {isSuperAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
+                        <div className="flex gap-2">
+                          {user.role !== 'admin' && (
+                            <button
+                              onClick={() => handleChangeUserRole(user.id, 'admin')}
+                              className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                            >
+                              Rendi Admin
+                            </button>
+                          )}
+                          {user.role === 'admin' && (
+                            <button
+                              onClick={() => handleChangeUserRole(user.id, 'user')}
+                              className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
+                            >
+                              Rendi Utente
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Stats button - available to all admins */}
+                      <button
+                        onClick={() => loadOtherUserStats(user.id, user.displayName)}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                      >
+                        📊 Stats
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   // Render footer navigation (visible only for logged users)
   const renderFooter = () => {
@@ -1608,24 +1677,22 @@ export default function VolleyballApp() {
               <span className="text-xs">Storico</span>
             </button>
             
-            {/* Users (admin only) */}
-            {isAdmin && (
-              <button
-                onClick={() => {
-                  loadAllUsers();
-                  setCurrentView(VIEW_STATES.USERS_LIST);
-                }}
-                className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
-                  currentView === VIEW_STATES.USERS_LIST 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'text-gray-400 hover:text-gray-200'
-                }`}
-                title="Utenti"
-              >
-                <UserCheck className="w-6 h-6" />
-                <span className="text-xs">Utenti</span>
-              </button>
-            )}
+            {/* Users - accessible to all logged users */}
+            <button
+              onClick={() => {
+                loadAllUsers();
+                setCurrentView(VIEW_STATES.USERS_LIST);
+              }}
+              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+                currentView === VIEW_STATES.USERS_LIST 
+                ? 'bg-indigo-600 text-white' 
+                : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Utenti"
+            >
+              <UserCheck className="w-6 h-6" />
+              <span className="text-xs">Utenti</span>
+            </button>
           </div>
         </div>
       </div>

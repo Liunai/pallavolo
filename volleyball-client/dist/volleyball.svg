@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32">
+  <!-- Sfera principale -->
+  <circle cx="50" cy="50" r="45" fill="#f8f9fa" stroke="#2d3748" stroke-width="2"/>
+  
+  <!-- Linee del pallone da pallavolo -->
+  <!-- Linea verticale centrale -->
+  <path d="M 50 5 Q 50 25 50 50 Q 50 75 50 95" stroke="#2d3748" stroke-width="2" fill="none"/>
+  
+  <!-- Linee curve laterali -->
+  <path d="M 20 15 Q 35 30 35 50 Q 35 70 20 85" stroke="#2d3748" stroke-width="2" fill="none"/>
+  <path d="M 80 15 Q 65 30 65 50 Q 65 70 80 85" stroke="#2d3748" stroke-width="2" fill="none"/>
+  
+  <!-- Linee orizzontali curve -->
+  <path d="M 15 35 Q 30 40 50 40 Q 70 40 85 35" stroke="#2d3748" stroke-width="2" fill="none"/>
+  <path d="M 15 65 Q 30 60 50 60 Q 70 60 85 65" stroke="#2d3748" stroke-width="2" fill="none"/>
+</svg>
