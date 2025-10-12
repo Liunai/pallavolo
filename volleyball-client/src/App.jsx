@@ -1,5 +1,5 @@
 
-import React from 'react';
+// import React rimosso, già importato sotto
 import VolleyballSignup from './components/VolleyballSignup.jsx';
 import HomePage from './components/HomePage.jsx';
 import './App.css';
