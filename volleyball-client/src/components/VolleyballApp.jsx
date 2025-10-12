@@ -300,8 +300,9 @@ export default function VolleyballApp() {
           displayName: user.displayName,
           photoURL: user.photoURL,
           lastLogin: serverTimestamp(),
-          // Preserva customDisplayName se esiste già
-          ...(existingData.customDisplayName && { customDisplayName: existingData.customDisplayName })
+          // Preserva customDisplayName e role se esistono già
+          ...(existingData.customDisplayName && { customDisplayName: existingData.customDisplayName }),
+          ...(existingData.role && { role: existingData.role })
         },
         { merge: true }
       );
