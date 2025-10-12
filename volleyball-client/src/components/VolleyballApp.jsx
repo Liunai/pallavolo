@@ -876,6 +876,31 @@ export default function VolleyballApp() {
     <div className="flex flex-col items-center justify-center">
       <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 w-full max-w-md text-center">
         <div className="text-lg text-yellow-200 mb-6">Nessuna partita attiva, attendere che venga creata</div>
+        
+        {/* Se l'utente non è loggato, mostra il pulsante di login */}
+        {!isLoggedIn && (
+          <div className="mb-6">
+            <p className="text-gray-400 text-sm mb-4">Effettua il login per partecipare alle partite</p>
+            <button
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Accesso...
+                </>
+              ) : (
+                <>
+                  <Users className="w-5 h-5" />
+                  Accedi con Google
+                </>
+              )}
+            </button>
+          </div>
+        )}
+        
         {isAdmin && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 mb-2">
