@@ -46,6 +46,7 @@ export default function VolleyballApp() {
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
+  const [activeMatches, setActiveMatches] = useState([]); // Lista di tutte le partite attive
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
   const isAdmin = currentUser?.email === 'tidolamiamail@gmail.com';
@@ -116,6 +117,44 @@ export default function VolleyballApp() {
     };
   }, [currentSessionRef]); // RIMOSSA dipendenza da currentView
 
+  // Load active matches from activeMatches collection
+  useEffect(() => {
+    const loadActiveMatches = async () => {
+      try {
+        const q = query(
+          collection(db, 'activeMatches'),
+          orderBy('date', 'asc')
+        );
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const matches = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setActiveMatches(matches);
+          
+          // Update view based on active matches
+          if (currentView === VIEW_STATES.NO_MATCHES && matches.length > 0) {
+            setCurrentView(VIEW_STATES.MATCH_LIST);
+          } else if (currentView === VIEW_STATES.MATCH_LIST && matches.length === 0) {
+            setCurrentView(VIEW_STATES.NO_MATCHES);
+          }
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error loading active matches:', error);
+        setActiveMatches([]);
+      }
+    };
+
+    const unsubscribe = loadActiveMatches();
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe.then(unsub => unsub());
+      }
+    };
+  }, [currentView]);
+
   // Funzione per calcolare la data del martedì successivo alle 20:30
   function getNextTuesday() {
     const today = new Date();
@@ -133,31 +172,40 @@ export default function VolleyballApp() {
   // Stato locale per la data della prossima partita
   const [nextSessionDate, setNextSessionDate] = useState(getNextTuesday());
 
-  // Crea nuova partita (reset iscrizioni, data martedì successivo)
+  // Crea nuova partita (aggiunge alla collezione activeMatches)
   const handleNewSession = async () => {
     if (!isAdmin) return;
-    // Controlla se esiste già una partita lo stesso giorno
-    const snap = await getDoc(currentSessionRef);
-    const data = snap.exists() ? snap.data() : null;
-    if (data && data.date) {
-      const existingDate = new Date(data.date);
-      const newDate = new Date(nextSessionDate);
-      if (
-        existingDate.getFullYear() === newDate.getFullYear() &&
-        existingDate.getMonth() === newDate.getMonth() &&
-        existingDate.getDate() === newDate.getDate()
-      ) {
-        alert('Esiste già una partita per questo giorno!');
+    
+    try {
+      // Controlla se esiste già una partita nello stesso giorno e ora
+      const q = query(
+        collection(db, 'activeMatches'),
+        where('date', '==', nextSessionDate)
+      );
+      const existingMatches = await getDocs(q);
+      
+      if (!existingMatches.empty) {
+        alert('Esiste già una partita per questo giorno e orario!');
         return;
       }
+
+      // Crea nuova partita nella collezione activeMatches
+      const newMatchRef = await addDoc(collection(db, 'activeMatches'), {
+        participants: [],
+        reserves: [],
+        date: nextSessionDate,
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+        createdBy: currentUser.uid,
+        status: 'active'
+      });
+
+      alert('Nuova partita creata!');
+      console.log('Partita creata con ID:', newMatchRef.id);
+    } catch (error) {
+      console.error('Errore nella creazione della partita:', error);
+      alert('Errore nella creazione della partita');
     }
-    await setDoc(currentSessionRef, {
-      participants: [],
-      reserves: [],
-      lastUpdated: serverTimestamp(),
-      date: nextSessionDate,
-    }, { merge: true });
-    alert('Nuova partita creata!');
   };
 
   const handleGoogleLogin = async () => {
@@ -230,33 +278,37 @@ export default function VolleyballApp() {
   };
 
   const isUserSignedUp = () => {
+    if (!selectedMatch) return false;
     return (
-      participants.some((p) => p.uid === currentUser?.uid) ||
-      reserves.some((r) => r.uid === currentUser?.uid)
+      selectedMatch.participants?.some((p) => p.uid === currentUser?.uid) ||
+      selectedMatch.reserves?.some((r) => r.uid === currentUser?.uid)
     );
   };
 
-  // Non permettere iscrizione se non esiste una partita
-  const canSignup = !!sessionDate;
+  // Non permettere iscrizione se non esiste una partita selezionata
+  const canSignup = !!selectedMatch;
 
   const getTotalCount = () => {
-    let total = participants.length;
-    for (const p of participants) total += (p.friends?.length || 0);
+    if (!selectedMatch) return 0;
+    let total = selectedMatch.participants?.length || 0;
+    for (const p of (selectedMatch.participants || [])) total += (p.friends?.length || 0);
     return total;
   };
 
   const getReservesTotalCount = () => {
-    let total = reserves.length;
-    for (const r of reserves) total += (r.friends?.length || 0);
+    if (!selectedMatch) return 0;
+    let total = selectedMatch.reserves?.length || 0;
+    for (const r of (selectedMatch.reserves || [])) total += (r.friends?.length || 0);
     return total;
   };
 
   const handleSignup = async (asReserve = false) => {
-    if (!isLoggedIn || !currentUser) return;
+    if (!isLoggedIn || !currentUser || !selectedMatch) return;
 
     try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(currentSessionRef);
+        const snap = await transaction.get(matchRef);
         const data = snap.data() || { participants: [], reserves: [] };
         const alreadyParticipant = data.participants?.some((p) => p.uid === currentUser.uid);
         const alreadyReserve = data.reserves?.some((r) => r.uid === currentUser.uid);
@@ -286,18 +338,17 @@ export default function VolleyballApp() {
           }
         }
 
-        transaction.set(currentSessionRef, {
+        transaction.update(matchRef, {
           participants: updated.participants,
           reserves: updated.reserves,
           lastUpdated: serverTimestamp(),
-          date: data.date, // Preserva la data della partita!
         });
       });
 
       setFriends([]);
       await loadUserStats(currentUser.uid);
 
-      if (!asReserve && participants.length >= MAX_PARTICIPANTS) {
+      if (!asReserve && (selectedMatch.participants?.length || 0) >= MAX_PARTICIPANTS) {
         alert('Lista partecipanti piena! Sei stato aggiunto alle riserve.');
       }
     } catch (e) {
@@ -620,43 +671,49 @@ export default function VolleyballApp() {
       <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
         <h2 className="text-2xl font-bold text-gray-100 mb-4">Partite Attive</h2>
         
-        {sessionDate ? (
+        {activeMatches.length > 0 ? (
           <div className="space-y-4">
-            <div 
-              onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
-              className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 cursor-pointer transition group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
-                    Partita di Pallavolo
-                  </h3>
-                  <p className="text-gray-400 mt-1">
-                    {new Date(sessionDate).toLocaleString('it-IT', { 
-                      dateStyle: 'full', 
-                      timeStyle: 'short' 
-                    })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-400">
-                      {getTotalCount()}
-                    </div>
-                    <div className="text-xs text-gray-400">Partecipanti</div>
+            {activeMatches.map((match) => (
+              <div 
+                key={match.id}
+                onClick={() => {
+                  setSelectedMatch(match);
+                  setCurrentView(VIEW_STATES.MATCH_DETAIL);
+                }}
+                className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 cursor-pointer transition group"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
+                      Partita di Pallavolo
+                    </h3>
+                    <p className="text-gray-400 mt-1">
+                      {new Date(match.date).toLocaleString('it-IT', { 
+                        dateStyle: 'full', 
+                        timeStyle: 'short' 
+                      })}
+                    </p>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-amber-400">
-                      {getReservesTotalCount()}
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-400">
+                        {(match.participants?.length || 0) + (match.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                      </div>
+                      <div className="text-xs text-gray-400">Partecipanti</div>
                     </div>
-                    <div className="text-xs text-gray-400">Riserve</div>
-                  </div>
-                  <div className="text-indigo-400">
-                    <span className="text-sm">Clicca per iscriverti →</span>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-amber-400">
+                        {(match.reserves?.length || 0) + (match.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
+                      </div>
+                      <div className="text-xs text-gray-400">Riserve</div>
+                    </div>
+                    <div className="text-indigo-400">
+                      <span className="text-sm">Clicca per iscriverti →</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ))}
             
             {isAdmin && (
               <div className="border-t border-gray-600 pt-4 space-y-4">
@@ -677,12 +734,6 @@ export default function VolleyballApp() {
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
                   >
                     Crea Nuova Partita
-                  </button>
-                  <button
-                    onClick={handleEndSession}
-                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
-                  >
-                    Archivia Partita Corrente
                   </button>
                 </div>
               </div>
@@ -829,10 +880,10 @@ export default function VolleyballApp() {
                   </span>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {participants.length === 0 ? (
+                  {!selectedMatch || !selectedMatch.participants || selectedMatch.participants.length === 0 ? (
                     <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
                   ) : (
-                    participants.map((participant, index) => (
+                    selectedMatch.participants.map((participant, index) => (
                       <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
                         <div className="flex items-center gap-3">
                           <img
@@ -892,10 +943,10 @@ export default function VolleyballApp() {
                   </span>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {reserves.length === 0 ? (
+                  {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
                     <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
                   ) : (
-                    reserves.map((reserve, index) => (
+                    selectedMatch.reserves.map((reserve, index) => (
                       <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
                         <div className="flex items-center gap-3">
                           <img
