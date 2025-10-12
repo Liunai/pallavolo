@@ -98,14 +98,18 @@ export default function VolleyballApp() {
         setReserves(Array.isArray(data?.reserves) ? data.reserves : []);
         setSessionDate(data?.date || null);
         
-        // Determine current view based on data
-        if (data?.date) {
-          // Se c'è una partita attiva, mostra sempre la vista dettaglio
-          setCurrentView(VIEW_STATES.MATCH_DETAIL);
-          setSelectedMatch(data);
-        } else {
-          // Se non c'è partita, mostra la vista "nessuna partita"
-          setCurrentView(VIEW_STATES.NO_MATCHES);
+        // Determine current view based on data - only if not manually set
+        if (currentView !== VIEW_STATES.MATCH_HISTORY) {
+          if (data?.date) {
+            // Se c'è una partita attiva, mostra la lista partite per default
+            if (currentView === VIEW_STATES.NO_MATCHES) {
+              setCurrentView(VIEW_STATES.MATCH_LIST);
+            }
+            setSelectedMatch(data);
+          } else {
+            // Se non c'è partita, mostra la vista "nessuna partita"
+            setCurrentView(VIEW_STATES.NO_MATCHES);
+          }
         }
       });
     })();
@@ -491,6 +495,8 @@ export default function VolleyballApp() {
               </div>
             ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Partite già giocate</div>
+            ) : currentView === VIEW_STATES.MATCH_LIST && sessionDate ? (
+              <div className="mt-2 text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
             )}
@@ -500,23 +506,23 @@ export default function VolleyballApp() {
         <div className="flex items-center gap-2 mr-4">
           {currentView === VIEW_STATES.MATCH_DETAIL && (
             <button
-              onClick={() => setCurrentView(VIEW_STATES.NO_MATCHES)}
+              onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
               className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-              title="Torna indietro"
+              title="Torna alla lista partite"
             >
               <ChevronLeft className="w-6 h-6 text-gray-300" />
             </button>
           )}
           {currentView === VIEW_STATES.MATCH_HISTORY && (
             <button
-              onClick={() => setCurrentView(VIEW_STATES.NO_MATCHES)}
+              onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
               className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-              title="Torna indietro"
+              title="Torna alla lista partite"
             >
               <ChevronLeft className="w-6 h-6 text-gray-300" />
             </button>
           )}
-          {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_DETAIL) && (
+          {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) && (
             <button
               onClick={() => {
                 loadMatchHistory();
@@ -604,6 +610,109 @@ export default function VolleyballApp() {
             >
               Crea nuova partita
             </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Render match list view 
+  const renderMatchListView = () => (
+    <div className="space-y-6">
+      <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+        <h2 className="text-2xl font-bold text-gray-100 mb-4">Partite Attive</h2>
+        
+        {sessionDate ? (
+          <div className="space-y-4">
+            <div 
+              onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+              className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-indigo-500 cursor-pointer transition group"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
+                    Partita di Pallavolo
+                  </h3>
+                  <p className="text-gray-400 mt-1">
+                    {new Date(sessionDate).toLocaleString('it-IT', { 
+                      dateStyle: 'full', 
+                      timeStyle: 'short' 
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-400">
+                      {getTotalCount()}
+                    </div>
+                    <div className="text-xs text-gray-400">Partecipanti</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-amber-400">
+                      {getReservesTotalCount()}
+                    </div>
+                    <div className="text-xs text-gray-400">Riserve</div>
+                  </div>
+                  <div className="text-indigo-400">
+                    <span className="text-sm">Clicca per iscriverti →</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {isAdmin && (
+              <div className="border-t border-gray-600 pt-4 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-100">Controlli Admin</h3>
+                <div className="flex items-center gap-3 mb-2">
+                  <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
+                  <input
+                    id="nextSessionDate"
+                    type="datetime-local"
+                    value={nextSessionDate}
+                    onChange={e => setNextSessionDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleNewSession}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                  >
+                    Crea Nuova Partita
+                  </button>
+                  <button
+                    onClick={handleEndSession}
+                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                  >
+                    Archivia Partita Corrente
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-400 mb-4">Nessuna partita attiva al momento</p>
+            {isAdmin && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-2 justify-center">
+                  <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data partita:</label>
+                  <input
+                    id="nextSessionDate"
+                    type="datetime-local"
+                    value={nextSessionDate}
+                    onChange={e => setNextSessionDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handleNewSession}
+                  className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                >
+                  Crea Prima Partita
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -974,6 +1083,7 @@ export default function VolleyballApp() {
         {renderHeader()}
         
         {currentView === VIEW_STATES.NO_MATCHES && renderNoMatchesView()}
+        {currentView === VIEW_STATES.MATCH_LIST && renderMatchListView()}
         {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
         {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
       </div>
