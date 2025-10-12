@@ -551,38 +551,40 @@ export default function VolleyballApp() {
   };
 
   const handleUnsubscribe = async () => {
-    if (!isLoggedIn || !currentUser) return;
+    if (!isLoggedIn || !currentUser || !selectedMatch) return;
 
     try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(currentSessionRef);
+        const snap = await transaction.get(matchRef);
         const data = snap.data() || { participants: [], reserves: [] };
-        const participantIndex = data.participants.findIndex((p) => p.uid === currentUser.uid);
-        const reserveIndex = data.reserves.findIndex((r) => r.uid === currentUser.uid);
+        const participantIndex = data.participants?.findIndex((p) => p.uid === currentUser.uid);
+        const reserveIndex = data.reserves?.findIndex((r) => r.uid === currentUser.uid);
 
-        if (participantIndex === -1 && reserveIndex === -1) {
-          throw new Error('Non sei iscritto a questo allenamento.');
+        if ((participantIndex === undefined || participantIndex === -1) && 
+            (reserveIndex === undefined || reserveIndex === -1)) {
+          throw new Error('Non sei iscritto a questa partita.');
         }
 
-        const newParticipants = [...data.participants];
-        let newReserves = [...data.reserves];
+        const newParticipants = [...(data.participants || [])];
+        let newReserves = [...(data.reserves || [])];
 
-        if (participantIndex !== -1) {
+        if (participantIndex !== undefined && participantIndex !== -1) {
           newParticipants.splice(participantIndex, 1);
+          // Se rimuovo un partecipante e ci sono riserve, promuovo la prima riserva
           if (newReserves.length > 0) {
             const firstReserve = newReserves[0];
             newReserves = newReserves.slice(1);
             newParticipants.push(firstReserve);
           }
-        } else if (reserveIndex !== -1) {
+        } else if (reserveIndex !== undefined && reserveIndex !== -1) {
           newReserves = newReserves.filter((r) => r.uid !== currentUser.uid);
         }
 
-        transaction.set(currentSessionRef, {
+        transaction.update(matchRef, {
           participants: newParticipants,
           reserves: newReserves,
           lastUpdated: serverTimestamp(),
-          date: data.date, // Preserva la data della partita!
         });
       });
     } catch (e) {
@@ -592,15 +594,16 @@ export default function VolleyballApp() {
 
   // Admin functions to remove users/friends
   const handleAdminRemoveUser = async (userUid, isReserve = false) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !selectedMatch) return;
     
     try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(currentSessionRef);
+        const snap = await transaction.get(matchRef);
         const data = snap.data() || { participants: [], reserves: [] };
         
-        let newParticipants = [...data.participants];
-        let newReserves = [...data.reserves];
+        let newParticipants = [...(data.participants || [])];
+        let newReserves = [...(data.reserves || [])];
         
         if (isReserve) {
           newReserves = newReserves.filter((r) => r.uid !== userUid);
@@ -614,11 +617,10 @@ export default function VolleyballApp() {
           }
         }
         
-        transaction.set(currentSessionRef, {
+        transaction.update(matchRef, {
           participants: newParticipants,
           reserves: newReserves,
           lastUpdated: serverTimestamp(),
-          date: data.date,
         });
       });
     } catch (e) {
@@ -627,15 +629,16 @@ export default function VolleyballApp() {
   };
 
   const handleAdminRemoveFriend = async (userUid, friendIndex, isReserve = false) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !selectedMatch) return;
     
     try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
       await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(currentSessionRef);
+        const snap = await transaction.get(matchRef);
         const data = snap.data() || { participants: [], reserves: [] };
         
-        let newParticipants = [...data.participants];
-        let newReserves = [...data.reserves];
+        let newParticipants = [...(data.participants || [])];
+        let newReserves = [...(data.reserves || [])];
         
         if (isReserve) {
           const userIndex = newReserves.findIndex((r) => r.uid === userUid);
@@ -655,11 +658,10 @@ export default function VolleyballApp() {
           }
         }
         
-        transaction.set(currentSessionRef, {
+        transaction.update(matchRef, {
           participants: newParticipants,
           reserves: newReserves,
           lastUpdated: serverTimestamp(),
-          date: data.date,
         });
       });
     } catch (e) {
@@ -732,7 +734,8 @@ export default function VolleyballApp() {
             <h1 className="text-3xl font-bold text-gray-100">
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 'Iscrizioni pallavolo'}
             </h1>
-            {currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
+            {/* Subtitle visible only for logged users */}
+            {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">
                 Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
               </div>
@@ -742,45 +745,48 @@ export default function VolleyballApp() {
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
-            )}
+            ))}
           </div>
         </div>
-        {/* Navigation buttons */}
-        <div className="flex items-center gap-2 mr-4">
-          {currentView === VIEW_STATES.MATCH_DETAIL && (
-            <button
-              onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
-              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-              title="Torna alla lista partite"
-            >
-              <ChevronLeft className="w-6 h-6 text-gray-300" />
-            </button>
-          )}
-          {currentView === VIEW_STATES.MATCH_HISTORY && (
-            <button
-              onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
-              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-              title="Torna alla lista partite"
-            >
-              <ChevronLeft className="w-6 h-6 text-gray-300" />
-            </button>
-          )}
-          {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) && (
-            <button
-              onClick={() => {
-                loadMatchHistory();
-                setCurrentView(VIEW_STATES.MATCH_HISTORY);
-              }}
-              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-              title="Visualizza storico partite"
-            >
-              <Calendar className="w-6 h-6 text-gray-300" />
-            </button>
-          )}
-        </div>
-        {/* User icon always visible */}
+        {/* Navigation buttons - visible only for logged users */}
         {isLoggedIn && (
-          <div className="relative ml-auto">
+          <div className="flex items-center gap-2 mr-4">
+            {currentView === VIEW_STATES.MATCH_DETAIL && (
+              <button
+                onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
+                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+                title="Torna alla lista partite"
+              >
+                <ChevronLeft className="w-6 h-6 text-gray-300" />
+              </button>
+            )}
+            {currentView === VIEW_STATES.MATCH_HISTORY && (
+              <button
+                onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
+                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+                title="Torna alla lista partite"
+              >
+                <ChevronLeft className="w-6 h-6 text-gray-300" />
+              </button>
+            )}
+            {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) && (
+              <button
+                onClick={() => {
+                  loadMatchHistory();
+                  setCurrentView(VIEW_STATES.MATCH_HISTORY);
+                }}
+                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+                title="Visualizza storico partite"
+              >
+                <Calendar className="w-6 h-6 text-gray-300" />
+              </button>
+            )}
+          </div>
+        )}
+        {/* User icon and name always visible when logged */}
+        {isLoggedIn && (
+          <div className="relative ml-auto flex items-center gap-3">
+            <span className="text-gray-100 font-medium">{customDisplayName || currentUser?.displayName}</span>
             <button
               onClick={() => setShowStats(!showStats)}
               className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
@@ -1416,10 +1422,38 @@ export default function VolleyballApp() {
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         
-        {currentView === VIEW_STATES.NO_MATCHES && renderNoMatchesView()}
-        {currentView === VIEW_STATES.MATCH_LIST && renderMatchListView()}
-        {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
-        {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
+        {/* Show only login for non-logged users */}
+        {!isLoggedIn ? (
+          <div className="flex flex-col items-center justify-center">
+            <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 w-full max-w-md text-center">
+              <div className="text-lg text-yellow-200 mb-6">Benvenuto! Effettua il login per accedere alle partite di pallavolo</div>
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Accesso...
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-5 h-5" />
+                    Accedi con Google
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {currentView === VIEW_STATES.NO_MATCHES && renderNoMatchesView()}
+            {currentView === VIEW_STATES.MATCH_LIST && renderMatchListView()}
+            {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
+            {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
+          </>
+        )}
         
         {/* Modal statistiche utente */}
         {showUserStatsModal && selectedUserStats && (
