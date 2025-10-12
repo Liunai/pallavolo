@@ -1701,7 +1701,7 @@ export default function VolleyballApp() {
   const handleReopenMatch = async (session) => {
     if (!isAdmin) return;
     
-    const confirmed = confirm('Sei sicuro di voler riaprire questa partita? Verrà aggiunta alle partite attive.');
+    const confirmed = confirm('Sei sicuro di voler riaprire questa partita? Verrà aggiunta alle partite attive e le statistiche verranno aggiornate.');
     if (!confirmed) return;
 
     try {
@@ -1717,10 +1717,31 @@ export default function VolleyballApp() {
         reopenedFrom: session.id
       });
 
+      // Decrementa le statistiche dei partecipanti (poiché la partita non è più "completata")
+      const participants = session.participants || [];
+      const reserves = session.reserves || [];
+      
+      const participantUpdates = participants.map((p) =>
+        updateDoc(doc(db, 'users', p.uid), {
+          'stats.totalSessions': increment(-1),
+          'stats.asParticipant': increment(-1),
+          'stats.friendsBrought': increment(-(p.friends?.length || 0)),
+        })
+      );
+      
+      const reserveUpdates = reserves.map((r) =>
+        updateDoc(doc(db, 'users', r.uid), {
+          'stats.asReserve': increment(-1),
+          'stats.friendsBrought': increment(-(r.friends?.length || 0)),
+        })
+      );
+      
+      await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
+
       // Rimuovi la sessione dallo storico
       await deleteDoc(doc(db, 'sessions', session.id));
       
-      alert('Partita riaperta con successo!');
+      alert('Partita riaperta con successo! Statistiche aggiornate.');
       await loadMatchHistory();
     } catch (error) {
       console.error('Errore nella riapertura della partita:', error);
