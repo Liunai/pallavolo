@@ -28,7 +28,9 @@ export default function VolleyballSignup() {
 
   const [participants, setParticipants] = useState([]);
   const [reserves, setReserves] = useState([]);
-  const [friendsCount, setFriendsCount] = useState(0);
+  const [sessionDate, setSessionDate] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [friendInput, setFriendInput] = useState("");
   const [showStats, setShowStats] = useState(false);
   const [userStats, setUserStats] = useState(null);
 
@@ -78,6 +80,7 @@ export default function VolleyballSignup() {
         const data = docSnap.data();
         setParticipants(Array.isArray(data?.participants) ? data.participants : []);
         setReserves(Array.isArray(data?.reserves) ? data.reserves : []);
+        setSessionDate(data?.date || null);
       });
     })();
     return () => {
@@ -181,6 +184,9 @@ export default function VolleyballSignup() {
     );
   };
 
+  // Non permettere iscrizione se non esiste una partita
+  const canSignup = !!sessionDate;
+
   const getTotalCount = () => {
     let total = participants.length;
     for (const p of participants) total += (p.friends?.length || 0);
@@ -196,10 +202,7 @@ export default function VolleyballSignup() {
   const handleSignup = async (asReserve = false) => {
     if (!isLoggedIn || !currentUser) return;
 
-    const friendsList = [];
-    for (let i = 0; i < friendsCount; i++) {
-      friendsList.push(`Amico ${i + 1} di ${currentUser.displayName}`);
-    }
+    // friends è già l'array dei nomi inseriti
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -215,7 +218,7 @@ export default function VolleyballSignup() {
           uid: currentUser.uid,
           name: currentUser.displayName,
           photoURL: currentUser.photoURL,
-          friends: friendsList,
+          friends,
           timestamp: new Date().toLocaleString('it-IT'),
         };
 
@@ -247,14 +250,14 @@ export default function VolleyballSignup() {
           stats: {
             asParticipant: asReserve ? increment(0) : increment(1),
             asReserve: asReserve ? increment(1) : increment(0),
-            friendsBrought: increment(friendsCount || 0),
+            friendsBrought: increment(friends.length || 0),
             totalSessions: increment(0), // updated only at session end
           },
         },
         { merge: true }
       );
 
-      setFriendsCount(0);
+  setFriends([]);
       await loadUserStats(currentUser.uid);
 
       if (!asReserve && participants.length >= MAX_PARTICIPANTS) {
@@ -379,6 +382,57 @@ export default function VolleyballSignup() {
             )}
           </div>
 
+          {/* HEADER: icona utente in alto a destra */}
+          <div className="flex justify-end mb-6">
+            {isLoggedIn && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className="p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition"
+                  title="Area personale"
+                >
+                  <img
+                    src={currentUser.photoURL || ''}
+                    alt={currentUser.displayName || ''}
+                    className="w-10 h-10 rounded-full border-2 border-indigo-500"
+                  />
+                </button>
+                {showStats && userStats && (
+                  <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10 p-6">
+                    <h3 className="text-xl font-bold text-gray-100 mb-4 flex items-center gap-2">
+                      <Award className="w-6 h-6 text-yellow-500" />
+                      Le tue statistiche
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
+                        <div className="text-sm text-gray-400">Sessioni totali</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
+                        <div className="text-sm text-gray-400">Come partecipante</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-amber-400">{userStats.asReserve || 0}</div>
+                        <div className="text-sm text-gray-400">Come riserva</div>
+                      </div>
+                      <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
+                        <div className="text-3xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
+                        <div className="text-sm text-gray-400">Amici portati</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="mt-6 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
+                    >
+                      Esci
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {!isLoggedIn ? (
             <div className="space-y-4 text-center py-8">
               <p className="text-gray-300 mb-6">Accedi con Google per iscriverti agli allenamenti</p>
@@ -399,19 +453,177 @@ export default function VolleyballSignup() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-indigo-900 rounded-lg p-4 border border-indigo-700 flex items-center gap-4">
-                <img
-                  src={currentUser.photoURL || ''}
-                  alt={currentUser.displayName || ''}
-                  className="w-12 h-12 rounded-full border-2 border-indigo-500"
-                />
-                <div className="flex-1">
-                  <p className="text-lg font-medium text-indigo-100">
-                    Benvenuto, <span className="font-bold">{currentUser.displayName}</span>!
-                  </p>
-                  <p className="text-sm text-indigo-300">{currentUser.email}</p>
+              {/* Mostra iscrizione e liste solo se esiste una partita */}
+              {canSignup ? (
+                <>
+                  {/* Pulsanti iscrizione/disiscrizione */}
+                  {!isUserSignedUp() && (
+                    <div className="space-y-4">
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleSignup(false)}
+                          className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2"
+                        >
+                          <UserPlus className="w-5 h-5" />
+                          Iscriviti come Partecipante
+                        </button>
+                        <button
+                          onClick={() => handleSignup(true)}
+                          className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium flex items-center justify-center gap-2"
+                        >
+                          <Clock className="w-5 h-5" />
+                          Iscriviti come Riserva
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            value={friendInput || ''}
+                            onChange={e => setFriendInput(e.target.value)}
+                            className="px-4 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Nome amico"
+                            disabled={friends.length >= 3}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (friendInput && friends.length < 3) {
+                                setFriends([...friends, friendInput]);
+                                setFriendInput('');
+                              }
+                            }}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                            disabled={!friendInput || friends.length >= 3}
+                          >
+                            Aggiungi amico
+                          </button>
+                        </div>
+                        {friends.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-sm text-gray-300 mb-2">Amici aggiunti:</div>
+                            <ul className="space-y-2">
+                              {friends.map((name, idx) => (
+                                <li key={idx} className="flex items-center gap-2">
+                                  <span className="bg-indigo-900 text-indigo-100 px-3 py-1 rounded-full">{name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setFriends(friends.filter((_, i) => i !== idx))}
+                                    className="text-red-400 hover:text-red-600 text-xs"
+                                  >
+                                    Rimuovi
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {isUserSignedUp() && (
+                    <button
+                      onClick={handleUnsubscribe}
+                      className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                    >
+                      Disiscriviti
+                    </button>
+                  )}
+                  {/* Liste partecipanti/riserve */}
+                  <div className="grid md:grid-cols-2 gap-6 mt-8">
+                    <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
+                        <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
+                          {getTotalCount()} / {MAX_PARTICIPANTS}
+                        </span>
+                      </div>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {participants.length === 0 ? (
+                          <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
+                        ) : (
+                          participants.map((participant, index) => (
+                            <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={participant.photoURL}
+                                  alt={participant.name}
+                                  className="w-10 h-10 rounded-full border-2 border-green-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-gray-100">{participant.name}</span>
+                                    <span className="text-xs text-gray-400">{participant.timestamp}</span>
+                                  </div>
+                                  {participant.friends?.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      {participant.friends.map((friend, fIndex) => (
+                                        <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
+                                          <span className="text-green-400">↳</span>
+                                          {friend}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
+                        <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
+                          {getReservesTotalCount()}
+                        </span>
+                      </div>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {reserves.length === 0 ? (
+                          <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
+                        ) : (
+                          reserves.map((reserve, index) => (
+                            <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={reserve.photoURL}
+                                  alt={reserve.name}
+                                  className="w-10 h-10 rounded-full border-2 border-amber-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-gray-100">
+                                      {index + 1}. {reserve.name}
+                                    </span>
+                                    <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                                  </div>
+                                  {reserve.friends?.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      {reserve.friends.map((friend, fIndex) => (
+                                        <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
+                                          <span className="text-amber-400">↳</span>
+                                          {friend}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-yellow-900 text-yellow-100 rounded-lg p-4 border border-yellow-700 text-center">
+                  Nessuna partita attiva. Attendi che l'organizzatore crei una nuova partita.
                 </div>
-              </div>
+              )}
+            </div>
+          )}
 
               {showStats && userStats && (
                 <div className="bg-gray-700 rounded-lg p-6 border border-gray-600">
@@ -520,96 +732,7 @@ export default function VolleyballSignup() {
           )}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
-              <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
-                {getTotalCount()} / {MAX_PARTICIPANTS}
-              </span>
-            </div>
-
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {participants.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
-              ) : (
-                participants.map((participant, index) => (
-                  <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={participant.photoURL}
-                        alt={participant.name}
-                        className="w-10 h-10 rounded-full border-2 border-green-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-100">{participant.name}</span>
-                          <span className="text-xs text-gray-400">{participant.timestamp}</span>
-                        </div>
-                        {participant.friends?.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {participant.friends.map((friend, fIndex) => (
-                              <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
-                                <span className="text-green-400">↳</span>
-                                {friend}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
-              <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
-                {getReservesTotalCount()}
-              </span>
-            </div>
-
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {reserves.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
-              ) : (
-                reserves.map((reserve, index) => (
-                  <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={reserve.photoURL}
-                        alt={reserve.name}
-                        className="w-10 h-10 rounded-full border-2 border-amber-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-100">
-                            {index + 1}. {reserve.name}
-                          </span>
-                          <span className="text-xs text-gray-400">{reserve.timestamp}</span>
-                        </div>
-                        {reserve.friends?.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {reserve.friends.map((friend, fIndex) => (
-                              <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
-                                <span className="text-amber-400">↳</span>
-                                {friend}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Le liste sono ora mostrate solo nel blocco condizionale canSignup */}
     </div>
   );
 }
