@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft } from 'lucide-react';
+import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
@@ -26,7 +26,8 @@ const VIEW_STATES = {
   NO_MATCHES: 'no_matches',
   MATCH_LIST: 'match_list', 
   MATCH_DETAIL: 'match_detail',
-  MATCH_HISTORY: 'match_history'
+  MATCH_HISTORY: 'match_history',
+  USERS_LIST: 'users_list'
 };
 
 export default function VolleyballApp() {
@@ -50,6 +51,11 @@ export default function VolleyballApp() {
   // States for viewing other users' stats
   const [showUserStatsModal, setShowUserStatsModal] = useState(false);
   const [selectedUserStats, setSelectedUserStats] = useState(null);
+  
+  // States for user roles and management
+  const [userRole, setUserRole] = useState('user'); // user, admin, super-admin
+  const [allUsers, setAllUsers] = useState([]);
+  const [showUsersModal, setShowUsersModal] = useState(false);
 
   // New state management for unified component
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
@@ -58,7 +64,12 @@ export default function VolleyballApp() {
   const [activeMatches, setActiveMatches] = useState([]); // Lista di tutte le partite attive
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
-  const isAdmin = currentUser?.email === 'tidolamiamail@gmail.com';
+  
+  // Role-based permissions
+  const SUPER_ADMIN_EMAIL = 'tidolamiamail@gmail.com';
+  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+  const isAdmin = userRole === 'admin' || isSuperAdmin;
+  const isUser = userRole === 'user';
 
   // Listen to auth state
   useEffect(() => {
@@ -71,11 +82,21 @@ export default function VolleyballApp() {
         const userDocRef = doc(db, 'users', user.uid);
         const userDoc = await getDoc(userDocRef);
         
+        let userData = {};
         if (userDoc.exists()) {
-          const userData = userDoc.data();
+          userData = userDoc.data();
           setCustomDisplayName(userData.customDisplayName || user.displayName);
+          // Set role based on existing data or super admin check
+          if (user.email === SUPER_ADMIN_EMAIL) {
+            setUserRole('super-admin');
+          } else {
+            setUserRole(userData.role || 'user');
+          }
         } else {
           setCustomDisplayName(user.displayName);
+          // Set initial role
+          const initialRole = user.email === SUPER_ADMIN_EMAIL ? 'super-admin' : 'user';
+          setUserRole(initialRole);
         }
         
         await setDoc(
@@ -85,6 +106,7 @@ export default function VolleyballApp() {
             displayName: user.displayName,
             photoURL: user.photoURL,
             lastLogin: serverTimestamp(),
+            role: userRole || (user.email === SUPER_ADMIN_EMAIL ? 'super-admin' : 'user'),
           },
           { merge: true }
         );
@@ -471,6 +493,76 @@ export default function VolleyballApp() {
     }
   };
 
+  // Function to load all users (admin only)
+  const loadAllUsers = async () => {
+    if (!isAdmin) return;
+    
+    try {
+      const q = query(
+        collection(db, 'users'),
+        orderBy('lastLogin', 'desc')
+      );
+      const usersSnap = await getDocs(q);
+      const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setAllUsers(users);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setAllUsers([]);
+    }
+  };
+
+  // Function to change user role (admin only)
+  const handleChangeUserRole = async (userId, newRole) => {
+    if (!isAdmin || userId === currentUser?.uid) return;
+    
+    // Prevent changing super admin role
+    const targetUser = allUsers.find(u => u.id === userId);
+    if (targetUser?.email === SUPER_ADMIN_EMAIL) {
+      alert('Non puoi modificare il ruolo del super admin');
+      return;
+    }
+    
+    try {
+      await setDoc(
+        doc(db, 'users', userId),
+        { role: newRole },
+        { merge: true }
+      );
+      
+      // Update local state
+      setAllUsers(users => users.map(user => 
+        user.id === userId ? { ...user, role: newRole } : user
+      ));
+      
+      alert(`Ruolo utente aggiornato a: ${newRole}`);
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      alert('Errore nell\'aggiornamento del ruolo');
+    }
+  };
+
+  // Function to mark session as ignored in statistics
+  const handleIgnoreSession = async (sessionId) => {
+    if (!isAdmin) return;
+    
+    const confirmed = confirm('Sei sicuro di voler ignorare questa sessione dalle statistiche?');
+    if (!confirmed) return;
+
+    try {
+      await setDoc(
+        doc(db, 'sessions', sessionId),
+        { ignoredFromStats: true },
+        { merge: true }
+      );
+      
+      alert('Sessione ignorata dalle statistiche');
+      loadMatchHistory();
+    } catch (error) {
+      console.error('Errore nell\'ignorare la sessione:', error);
+      alert('Errore nell\'ignorare la sessione');
+    }
+  };
+
   const isUserSignedUp = () => {
     if (!selectedMatch) return false;
     return (
@@ -724,15 +816,17 @@ export default function VolleyballApp() {
 
   // Render header (consistent across all views)
   const renderHeader = () => (
-    <div className="bg-gray-800 rounded-xl shadow-2xl p-8 mb-6 border border-gray-700">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-gray-800 rounded-xl shadow-2xl p-6 mb-6 border border-gray-700">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-600 p-3 rounded-lg">
             <Users className="w-8 h-8 text-white" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-100">
-              {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 'Iscrizioni pallavolo'}
+              {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
+               currentView === VIEW_STATES.USERS_LIST ? 'Gestione Utenti' : 
+               'Iscrizioni pallavolo'}
             </h1>
             {/* Subtitle visible only for logged users */}
             {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
@@ -741,6 +835,8 @@ export default function VolleyballApp() {
               </div>
             ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Partite già giocate</div>
+            ) : currentView === VIEW_STATES.USERS_LIST ? (
+              <div className="mt-2 text-lg text-indigo-300 font-semibold">Gestisci ruoli e utenti</div>
             ) : currentView === VIEW_STATES.MATCH_LIST && sessionDate ? (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
@@ -748,44 +844,10 @@ export default function VolleyballApp() {
             ))}
           </div>
         </div>
-        {/* Navigation buttons - visible only for logged users */}
-        {isLoggedIn && (
-          <div className="flex items-center gap-2 mr-4">
-            {currentView === VIEW_STATES.MATCH_DETAIL && (
-              <button
-                onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
-                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-                title="Torna alla lista partite"
-              >
-                <ChevronLeft className="w-6 h-6 text-gray-300" />
-              </button>
-            )}
-            {currentView === VIEW_STATES.MATCH_HISTORY && (
-              <button
-                onClick={() => setCurrentView(sessionDate ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
-                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-                title="Torna alla lista partite"
-              >
-                <ChevronLeft className="w-6 h-6 text-gray-300" />
-              </button>
-            )}
-            {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) && (
-              <button
-                onClick={() => {
-                  loadMatchHistory();
-                  setCurrentView(VIEW_STATES.MATCH_HISTORY);
-                }}
-                className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-                title="Visualizza storico partite"
-              >
-                <Calendar className="w-6 h-6 text-gray-300" />
-              </button>
-            )}
-          </div>
-        )}
+        
         {/* User icon and name always visible when logged */}
         {isLoggedIn && (
-          <div className="relative ml-auto flex items-center gap-3">
+          <div className="relative flex items-center gap-3">
             <span className="text-gray-100 font-medium">{customDisplayName || currentUser?.displayName}</span>
             <button
               onClick={() => setShowStats(!showStats)}
@@ -1335,13 +1397,24 @@ export default function VolleyballApp() {
                     {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT') : 'Data non disponibile'}
                   </span>
                   {isAdmin && (
-                    <button
-                      onClick={() => handleDeleteSession(session.id)}
-                      className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                      title="Elimina sessione"
-                    >
-                      🗑️
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleIgnoreSession(session.id)}
+                        className={`text-yellow-400 hover:text-yellow-300 text-xs px-2 py-1 rounded transition ${
+                          session.ignoredFromStats ? 'bg-yellow-900/50' : 'bg-yellow-900/30 hover:bg-yellow-900/50'
+                        }`}
+                        title={session.ignoredFromStats ? "Sessione ignorata" : "Ignora dalle statistiche"}
+                      >
+                        {session.ignoredFromStats ? '👁️‍🗨️' : '🙈'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSession(session.id)}
+                        className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                        title="Elimina sessione"
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1416,9 +1489,152 @@ export default function VolleyballApp() {
     </div>
   );
 
+  // Render users list view (admin only)
+  const renderUsersListView = () => (
+    <div className="space-y-6">
+      {allUsers.length === 0 ? (
+        <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
+          <p className="text-gray-400">Nessun utente registrato</p>
+        </div>
+      ) : (
+        <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-100 mb-4">Gestione Utenti</h2>
+          
+          <div className="space-y-4">
+            {allUsers.map((user) => (
+              <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={user.photoURL || ''}
+                      alt={user.displayName || ''}
+                      className="w-12 h-12 rounded-full border-2 border-indigo-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-100">
+                        {user.customDisplayName || user.displayName}
+                      </div>
+                      <div className="text-sm text-gray-400">{user.email}</div>
+                      <div className="text-xs text-gray-500">
+                        {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {/* Role badge */}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      user.email === SUPER_ADMIN_EMAIL ? 'bg-purple-900 text-purple-200' :
+                      user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
+                      'bg-gray-600 text-gray-200'
+                    }`}>
+                      {user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 
+                       user.role === 'admin' ? 'Admin' : 'Utente'}
+                    </span>
+                    
+                    {/* Role change buttons (only for non-super-admin users) */}
+                    {user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
+                      <div className="flex gap-2">
+                        {user.role !== 'admin' && (
+                          <button
+                            onClick={() => handleChangeUserRole(user.id, 'admin')}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                          >
+                            Rendi Admin
+                          </button>
+                        )}
+                        {user.role === 'admin' && (
+                          <button
+                            onClick={() => handleChangeUserRole(user.id, 'user')}
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
+                          >
+                            Rendi Utente
+                          </button>
+                        )}
+                        <button
+                          onClick={() => loadOtherUserStats(user.id, user.displayName)}
+                          className="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                        >
+                          📊 Stats
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render footer navigation (visible only for logged users)
+  const renderFooter = () => {
+    if (!isLoggedIn) return null;
+    
+    return (
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 z-40">
+        <div className="max-w-6xl mx-auto flex justify-center">
+          <div className="flex items-center gap-6">
+            {/* Home/Matches */}
+            <button
+              onClick={() => setCurrentView(activeMatches.length > 0 ? VIEW_STATES.MATCH_LIST : VIEW_STATES.NO_MATCHES)}
+              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+                (currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_LIST || currentView === VIEW_STATES.MATCH_DETAIL) 
+                ? 'bg-indigo-600 text-white' 
+                : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Partite"
+            >
+              <Home className="w-6 h-6" />
+              <span className="text-xs">Partite</span>
+            </button>
+            
+            {/* History */}
+            <button
+              onClick={() => {
+                loadMatchHistory();
+                setCurrentView(VIEW_STATES.MATCH_HISTORY);
+              }}
+              className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+                currentView === VIEW_STATES.MATCH_HISTORY 
+                ? 'bg-indigo-600 text-white' 
+                : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Storico"
+            >
+              <History className="w-6 h-6" />
+              <span className="text-xs">Storico</span>
+            </button>
+            
+            {/* Users (admin only) */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  loadAllUsers();
+                  setCurrentView(VIEW_STATES.USERS_LIST);
+                }}
+                className={`flex flex-col items-center gap-1 p-2 rounded-lg transition ${
+                  currentView === VIEW_STATES.USERS_LIST 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Utenti"
+              >
+                <UserCheck className="w-6 h-6" />
+                <span className="text-xs">Utenti</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Main render function
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6 pb-24">
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         
@@ -1447,13 +1663,17 @@ export default function VolleyballApp() {
             </div>
           </div>
         ) : (
-          <>
+          <div className="mb-20"> {/* Extra margin for footer */}
             {currentView === VIEW_STATES.NO_MATCHES && renderNoMatchesView()}
             {currentView === VIEW_STATES.MATCH_LIST && renderMatchListView()}
             {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
             {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
-          </>
+            {currentView === VIEW_STATES.USERS_LIST && renderUsersListView()}
+          </div>
         )}
+        
+        {/* Footer navigation */}
+        {renderFooter()}
         
         {/* Modal statistiche utente */}
         {showUserStatsModal && selectedUserStats && (
