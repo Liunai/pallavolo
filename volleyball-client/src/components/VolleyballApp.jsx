@@ -1089,7 +1089,7 @@ export default function VolleyballApp() {
             {isAdmin && (
               <div className="border-t border-gray-600 pt-4 space-y-4">
                 <h3 className="text-lg font-semibold text-gray-100">Controlli Admin</h3>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3">
                   <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
                   <input
                     id="nextSessionDate"
@@ -1098,13 +1098,11 @@ export default function VolleyballApp() {
                     onChange={e => setNextSessionDate(e.target.value)}
                     className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-                <div className="flex gap-3">
                   <button
                     onClick={handleNewSession}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm"
                   >
-                    Crea Nuova Partita
+                    Crea
                   </button>
                 </div>
               </div>
@@ -1115,7 +1113,7 @@ export default function VolleyballApp() {
             <p className="text-gray-400 mb-4">Nessuna partita attiva al momento</p>
             {isAdmin && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-2 justify-center">
+                <div className="flex items-center gap-3 justify-center">
                   <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data partita:</label>
                   <input
                     id="nextSessionDate"
@@ -1124,13 +1122,13 @@ export default function VolleyballApp() {
                     onChange={e => setNextSessionDate(e.target.value)}
                     className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
                   />
+                  <button
+                    onClick={handleNewSession}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium text-sm"
+                  >
+                    Crea
+                  </button>
                 </div>
-                <button
-                  onClick={handleNewSession}
-                  className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
-                >
-                  Crea Prima Partita
-                </button>
               </div>
             )}
           </div>
@@ -1389,7 +1387,7 @@ export default function VolleyballApp() {
             {/* Area admin per super-admin */}
             {isAdmin && (
               <div className="space-y-4 mt-6">
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3">
                   <label htmlFor="nextSessionDate" className="text-sm text-gray-300 font-medium">Data prossima partita:</label>
                   <input
                     id="nextSessionDate"
@@ -1398,14 +1396,14 @@ export default function VolleyballApp() {
                     onChange={e => setNextSessionDate(e.target.value)}
                     className="px-3 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-blue-500"
                   />
+                  <button
+                    onClick={handleNewSession}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm flex items-center gap-1"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Crea
+                  </button>
                 </div>
-                <button
-                  onClick={handleNewSession}
-                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-                >
-                  <Calendar className="w-5 h-5" />
-                  Nuova partita
-                </button>
                 <button
                   onClick={handleEndSession}
                   className="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
@@ -1548,36 +1546,38 @@ export default function VolleyballApp() {
               {allUsers.map((user) => (
                 <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <img
                         src={user.photoURL || ''}
                         alt={user.displayName || ''}
                         className="w-12 h-12 rounded-full border-2 border-indigo-500"
                       />
-                      <div>
-                        <div className="font-medium text-gray-100">
-                          {user.customDisplayName || user.displayName}
-                        </div>
-                        <div className="text-sm text-gray-400">{user.email}</div>
-                        <div className="text-xs text-gray-500">
-                          {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
+                      <div className="flex items-center gap-6">
+                        <div>
+                          <div className="font-medium text-gray-100">
+                            {user.customDisplayName || user.displayName}
+                          </div>
+                          <div className="text-sm text-gray-400">{user.email}</div>
+                          <div className="text-xs text-gray-500">
+                            {user.lastLogin?.toDate ? user.lastLogin.toDate().toLocaleString('it-IT') : 'Mai'}
+                          </div>
                         </div>
                         
-                        {/* User statistics */}
-                        <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
-                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                        {/* User statistics - inline */}
+                        <div className="flex gap-3 text-xs">
+                          <div className="text-center">
                             <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
                             <div className="text-gray-400">Totali</div>
                           </div>
-                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                          <div className="text-center">
                             <div className="font-bold text-green-400">{user.stats?.asParticipant || 0}</div>
                             <div className="text-gray-400">Partec.</div>
                           </div>
-                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                          <div className="text-center">
                             <div className="font-bold text-amber-400">{user.stats?.asReserve || 0}</div>
                             <div className="text-gray-400">Riserve</div>
                           </div>
-                          <div className="bg-gray-600/30 rounded px-2 py-1 text-center">
+                          <div className="text-center">
                             <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
                             <div className="text-gray-400">Amici</div>
                           </div>
@@ -1586,14 +1586,14 @@ export default function VolleyballApp() {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      {/* Role badge - only show to super-admin */}
+                      {/* Role badge - only show to super-admin, but hide super admin role */}
                       {isSuperAdmin && (
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          user.email === SUPER_ADMIN_EMAIL ? 'bg-purple-900 text-purple-200' :
+                          user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
                           user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
                           'bg-gray-600 text-gray-200'
                         }`}>
-                          {user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 
+                          {user.email === SUPER_ADMIN_EMAIL ? 'Admin' : 
                            user.role === 'admin' ? 'Admin' : 'Utente'}
                         </span>
                       )}
