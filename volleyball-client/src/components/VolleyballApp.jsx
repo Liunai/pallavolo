@@ -1543,7 +1543,7 @@ export default function VolleyballApp() {
                 {getTotalCount()} / {MAX_PARTICIPANTS}
               </span>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
               {!selectedMatch || !selectedMatch.participants || selectedMatch.participants.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">Nessun partecipante</p>
               ) : (
@@ -1616,7 +1616,7 @@ export default function VolleyballApp() {
                   {getReservesTotalCount()}
                 </span>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
                 {!selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
                 ) : (
