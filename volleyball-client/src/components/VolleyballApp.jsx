@@ -25,7 +25,8 @@ const MAX_PARTICIPANTS = 14;
 const VIEW_STATES = {
   NO_MATCHES: 'no_matches',
   MATCH_LIST: 'match_list', 
-  MATCH_DETAIL: 'match_detail'
+  MATCH_DETAIL: 'match_detail',
+  MATCH_HISTORY: 'match_history'
 };
 
 export default function VolleyballApp() {
@@ -45,6 +46,7 @@ export default function VolleyballApp() {
   const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
   const [availableMatches, setAvailableMatches] = useState([]);
   const [selectedMatch, setSelectedMatch] = useState(null);
+  const [matchHistory, setMatchHistory] = useState([]);
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
   const isAdmin = currentUser?.email === 'tidolamiamail@gmail.com';
@@ -210,6 +212,21 @@ export default function VolleyballApp() {
     });
   };
 
+  const loadMatchHistory = async () => {
+    try {
+      const q = query(
+        collection(db, 'sessions'),
+        orderBy('date', 'desc')
+      );
+      const sessionsSnap = await getDocs(q);
+      const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setMatchHistory(sessions);
+    } catch (error) {
+      console.error('Error loading match history:', error);
+      setMatchHistory([]);
+    }
+  };
+
   const isUserSignedUp = () => {
     return (
       participants.some((p) => p.uid === currentUser?.uid) ||
@@ -275,20 +292,6 @@ export default function VolleyballApp() {
         });
       });
 
-      // Increment stats on user document for role and friends
-      await setDoc(
-        doc(db, 'users', currentUser.uid),
-        {
-          stats: {
-            asParticipant: asReserve ? increment(0) : increment(1),
-            asReserve: asReserve ? increment(1) : increment(0),
-            friendsBrought: increment(friends.length || 0),
-            totalSessions: increment(0), // updated only at session end
-          },
-        },
-        { merge: true }
-      );
-
       setFriends([]);
       await loadUserStats(currentUser.uid);
 
@@ -340,6 +343,83 @@ export default function VolleyballApp() {
     }
   };
 
+  // Admin functions to remove users/friends
+  const handleAdminRemoveUser = async (userUid, isReserve = false) => {
+    if (!isAdmin) return;
+    
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(currentSessionRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        let newParticipants = [...data.participants];
+        let newReserves = [...data.reserves];
+        
+        if (isReserve) {
+          newReserves = newReserves.filter((r) => r.uid !== userUid);
+        } else {
+          newParticipants = newParticipants.filter((p) => p.uid !== userUid);
+          // Se rimuovo un partecipante e ci sono riserve, promuovo la prima riserva
+          if (newReserves.length > 0) {
+            const firstReserve = newReserves[0];
+            newReserves = newReserves.slice(1);
+            newParticipants.push(firstReserve);
+          }
+        }
+        
+        transaction.set(currentSessionRef, {
+          participants: newParticipants,
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+          date: data.date,
+        });
+      });
+    } catch (e) {
+      alert(e.message || 'Errore durante la rimozione');
+    }
+  };
+
+  const handleAdminRemoveFriend = async (userUid, friendIndex, isReserve = false) => {
+    if (!isAdmin) return;
+    
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(currentSessionRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        let newParticipants = [...data.participants];
+        let newReserves = [...data.reserves];
+        
+        if (isReserve) {
+          const userIndex = newReserves.findIndex((r) => r.uid === userUid);
+          if (userIndex !== -1 && newReserves[userIndex].friends) {
+            newReserves[userIndex] = {
+              ...newReserves[userIndex],
+              friends: newReserves[userIndex].friends.filter((_, idx) => idx !== friendIndex)
+            };
+          }
+        } else {
+          const userIndex = newParticipants.findIndex((p) => p.uid === userUid);
+          if (userIndex !== -1 && newParticipants[userIndex].friends) {
+            newParticipants[userIndex] = {
+              ...newParticipants[userIndex],
+              friends: newParticipants[userIndex].friends.filter((_, idx) => idx !== friendIndex)
+            };
+          }
+        }
+        
+        transaction.set(currentSessionRef, {
+          participants: newParticipants,
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+          date: data.date,
+        });
+      });
+    } catch (e) {
+      alert(e.message || 'Errore durante la rimozione dell\'amico');
+    }
+  };
+
   const handleEndSession = async () => {
     try {
       const snap = await getDoc(currentSessionRef);
@@ -359,13 +439,24 @@ export default function VolleyballApp() {
 
       const newSessionRef = await addDoc(collection(db, 'sessions'), sessionRecord);
 
-      // Increment totalSessions for each participant
-      const updates = (data.participants || []).map((p) =>
+      // Increment totalSessions and other stats for each participant
+      const participantUpdates = (data.participants || []).map((p) =>
         updateDoc(doc(db, 'users', p.uid), {
           'stats.totalSessions': increment(1),
+          'stats.asParticipant': increment(1),
+          'stats.friendsBrought': increment(p.friends?.length || 0),
         })
       );
-      await Promise.allSettled(updates);
+      
+      // Increment reserve stats for reserves
+      const reserveUpdates = (data.reserves || []).map((r) =>
+        updateDoc(doc(db, 'users', r.uid), {
+          'stats.asReserve': increment(1),
+          'stats.friendsBrought': increment(r.friends?.length || 0),
+        })
+      );
+      
+      await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
 
       // Clear current session
       await setDoc(currentSessionRef, {
@@ -391,26 +482,53 @@ export default function VolleyballApp() {
             <Users className="w-8 h-8 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-100">Iscrizioni pallavolo</h1>
+            <h1 className="text-3xl font-bold text-gray-100">
+              {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 'Iscrizioni pallavolo'}
+            </h1>
             {currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">
                 Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
               </div>
+            ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
+              <div className="mt-2 text-lg text-indigo-300 font-semibold">Partite già giocate</div>
             ) : (
               <div className="mt-2 text-lg text-indigo-300 font-semibold">Nessuna partita attiva</div>
             )}
           </div>
         </div>
-        {/* Navigation back button for match detail view */}
-        {currentView === VIEW_STATES.MATCH_DETAIL && (
-          <button
-            onClick={() => setCurrentView(VIEW_STATES.NO_MATCHES)}
-            className="mr-4 p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
-            title="Torna indietro"
-          >
-            <ChevronLeft className="w-6 h-6 text-gray-300" />
-          </button>
-        )}
+        {/* Navigation buttons */}
+        <div className="flex items-center gap-2 mr-4">
+          {currentView === VIEW_STATES.MATCH_DETAIL && (
+            <button
+              onClick={() => setCurrentView(VIEW_STATES.NO_MATCHES)}
+              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+              title="Torna indietro"
+            >
+              <ChevronLeft className="w-6 h-6 text-gray-300" />
+            </button>
+          )}
+          {currentView === VIEW_STATES.MATCH_HISTORY && (
+            <button
+              onClick={() => setCurrentView(VIEW_STATES.NO_MATCHES)}
+              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+              title="Torna indietro"
+            >
+              <ChevronLeft className="w-6 h-6 text-gray-300" />
+            </button>
+          )}
+          {(currentView === VIEW_STATES.NO_MATCHES || currentView === VIEW_STATES.MATCH_DETAIL) && (
+            <button
+              onClick={() => {
+                loadMatchHistory();
+                setCurrentView(VIEW_STATES.MATCH_HISTORY);
+              }}
+              className="p-2 bg-gray-700 rounded-lg border border-gray-600 hover:bg-gray-600 transition"
+              title="Visualizza storico partite"
+            >
+              <Calendar className="w-6 h-6 text-gray-300" />
+            </button>
+          )}
+        </div>
         {/* User icon always visible */}
         {isLoggedIn && (
           <div className="relative ml-auto">
@@ -618,14 +736,36 @@ export default function VolleyballApp() {
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <span className="font-medium text-gray-100">{participant.name}</span>
-                              <span className="text-xs text-gray-400">{participant.timestamp}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">{participant.timestamp}</span>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleAdminRemoveUser(participant.uid, false)}
+                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                    title="Rimuovi utente"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             {participant.friends?.length > 0 && (
                               <div className="mt-2 space-y-1">
                                 {participant.friends.map((friend, fIndex) => (
-                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
-                                    <span className="text-green-400">↳</span>
-                                    {friend}
+                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-green-400">+</span>
+                                      {friend}
+                                    </div>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => handleAdminRemoveFriend(participant.uid, fIndex, false)}
+                                        className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                        title="Rimuovi amico"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -661,14 +801,36 @@ export default function VolleyballApp() {
                               <span className="font-medium text-gray-100">
                                 {index + 1}. {reserve.name}
                               </span>
-                              <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                    title="Rimuovi utente"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             {reserve.friends?.length > 0 && (
                               <div className="mt-2 space-y-1">
                                 {reserve.friends.map((friend, fIndex) => (
-                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2">
-                                    <span className="text-amber-400">↳</span>
-                                    {friend}
+                                  <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-amber-400">+</span>
+                                      {friend}
+                                    </div>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
+                                        className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                        title="Rimuovi amico"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -715,6 +877,96 @@ export default function VolleyballApp() {
     );
   };
 
+  // Render match history view
+  const renderMatchHistoryView = () => (
+    <div className="space-y-6">
+      {matchHistory.length === 0 ? (
+        <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
+          <p className="text-gray-400">Nessuna partita nel database</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {matchHistory.map((session, index) => (
+            <div key={session.id} className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-100">
+                  Partita #{matchHistory.length - index}
+                </h3>
+                <span className="text-sm text-gray-400">
+                  {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT') : 'Data non disponibile'}
+                </span>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Partecipanti */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h4 className="text-lg font-semibold text-gray-100">Partecipanti</h4>
+                    <span className="bg-green-900 text-green-200 px-2 py-1 rounded-full text-sm border border-green-700">
+                      {session.participants?.length || 0}
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {session.participants?.length > 0 ? (
+                      session.participants.map((participant, pIndex) => (
+                        <div key={pIndex} className="bg-green-900/50 rounded-lg p-3 border border-green-700">
+                          <div className="font-medium text-gray-100">{participant.name}</div>
+                          {participant.friends?.length > 0 && (
+                            <div className="mt-1">
+                              {participant.friends.map((friend, fIndex) => (
+                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-1">
+                                  <span className="text-green-400">+</span>
+                                  {friend}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-2">Nessun partecipante</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Riserve */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h4 className="text-lg font-semibold text-gray-100">Riserve</h4>
+                    <span className="bg-amber-900 text-amber-200 px-2 py-1 rounded-full text-sm border border-amber-700">
+                      {session.reserves?.length || 0}
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {session.reserves?.length > 0 ? (
+                      session.reserves.map((reserve, rIndex) => (
+                        <div key={rIndex} className="bg-amber-900/50 rounded-lg p-3 border border-amber-700">
+                          <div className="font-medium text-gray-100">{reserve.name}</div>
+                          {reserve.friends?.length > 0 && (
+                            <div className="mt-1">
+                              {reserve.friends.map((friend, fIndex) => (
+                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-1">
+                                  <span className="text-amber-400">+</span>
+                                  {friend}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-2">Nessuna riserva</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   // Main render function
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6">
@@ -723,6 +975,7 @@ export default function VolleyballApp() {
         
         {currentView === VIEW_STATES.NO_MATCHES && renderNoMatchesView()}
         {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
+        {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
       </div>
     </div>
   );
