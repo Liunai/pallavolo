@@ -112,6 +112,21 @@ export default function VolleyballSignup() {
   // Crea nuova partita (reset iscrizioni, data martedì successivo)
   const handleNewSession = async () => {
     if (!isAdmin) return;
+    // Controlla se esiste già una partita lo stesso giorno
+    const snap = await getDoc(currentSessionRef);
+    const data = snap.exists() ? snap.data() : null;
+    if (data && data.date) {
+      const existingDate = new Date(data.date);
+      const newDate = new Date(nextSessionDate);
+      if (
+        existingDate.getFullYear() === newDate.getFullYear() &&
+        existingDate.getMonth() === newDate.getMonth() &&
+        existingDate.getDate() === newDate.getDate()
+      ) {
+        alert('Esiste già una partita per questo giorno!');
+        return;
+      }
+    }
     await setDoc(currentSessionRef, {
       participants: [],
       reserves: [],
