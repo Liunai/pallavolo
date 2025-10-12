@@ -1109,11 +1109,7 @@ export default function VolleyballApp() {
                     <div className="text-lg md:text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
                     <div className="text-xs text-gray-400">Partite totali</div>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
-                    <div className="text-lg md:text-xl font-bold text-green-400">{userStats.asParticipant || 0}</div>
-                    <div className="text-xs text-gray-400">Come partecipante</div>
-                  </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50 col-span-2">
+                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
                     <div className="text-xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
                     <div className="text-xs text-gray-400">Amici portati</div>
                   </div>
@@ -1366,7 +1362,7 @@ export default function VolleyballApp() {
                       </p>
                     </div>
                   )}
-                  <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">3 amici</span> per sessione</div>
+                  <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">{isAdmin ? 'illimitati' : '3'} amici</span> per sessione</div>
                   <div className="flex gap-2 items-center">
                     <input
                       type="text"
@@ -1374,18 +1370,18 @@ export default function VolleyballApp() {
                       onChange={e => setFriendInput(e.target.value)}
                       className="px-4 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-indigo-500"
                       placeholder="Nome amico"
-                      disabled={friends.length >= 3}
+                      disabled={!isAdmin && friends.length >= 3}
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        if (friendInput && friends.length < 3) {
+                        if (friendInput && (isAdmin || friends.length < 3)) {
                           setFriends([...friends, friendInput]);
                           setFriendInput('');
                         }
                       }}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-                      disabled={!friendInput || friends.length >= 3}
+                      disabled={!friendInput || (!isAdmin && friends.length >= 3)}
                     >
                       Aggiungi amico
                     </button>
@@ -2033,10 +2029,6 @@ export default function VolleyballApp() {
                   <div className="text-xs text-gray-400">Partite totali</div>
                 </div>
                 <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                  <div className="text-xl font-bold text-green-400">{selectedUserStats.asParticipant || 0}</div>
-                  <div className="text-xs text-gray-400">Come partecipante</div>
-                </div>
-                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50 col-span-2">
                   <div className="text-xl font-bold text-purple-400">{selectedUserStats.friendsBrought || 0}</div>
                   <div className="text-xs text-gray-400">Amici portati</div>
                 </div>
