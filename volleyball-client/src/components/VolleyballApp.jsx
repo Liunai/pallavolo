@@ -98,11 +98,11 @@ export default function VolleyballApp() {
         
         // Determine current view based on data
         if (data?.date) {
-          if (currentView === VIEW_STATES.NO_MATCHES) {
-            setCurrentView(VIEW_STATES.MATCH_DETAIL);
-            setSelectedMatch(data);
-          }
+          // Se c'è una partita attiva, mostra sempre la vista dettaglio
+          setCurrentView(VIEW_STATES.MATCH_DETAIL);
+          setSelectedMatch(data);
         } else {
+          // Se non c'è partita, mostra la vista "nessuna partita"
           setCurrentView(VIEW_STATES.NO_MATCHES);
         }
       });
@@ -271,6 +271,7 @@ export default function VolleyballApp() {
           participants: updated.participants,
           reserves: updated.reserves,
           lastUpdated: serverTimestamp(),
+          date: data.date, // Preserva la data della partita!
         });
       });
 
@@ -331,6 +332,7 @@ export default function VolleyballApp() {
           participants: newParticipants,
           reserves: newReserves,
           lastUpdated: serverTimestamp(),
+          date: data.date, // Preserva la data della partita!
         });
       });
     } catch (e) {
