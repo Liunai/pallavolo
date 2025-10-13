@@ -30,7 +30,9 @@ const VIEW_STATES = {
   MATCH_HISTORY: 'match_history',
   USERS_LIST: 'users_list',
   FORMATION_PROPOSAL: 'formation_proposal',
-  FORMATION_RESULT: 'formation_result'
+  FORMATION_RESULT: 'formation_result',
+  ADD_SET: 'add_set',
+  SET_DETAIL: 'set_detail'
 };
 
 export default function VolleyballApp() {
@@ -80,6 +82,19 @@ export default function VolleyballApp() {
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [draggedPlayer, setDraggedPlayer] = useState(null);
   const [calculatedFormations, setCalculatedFormations] = useState(null);
+
+  // Set tracking states
+  const [matchSets, setMatchSets] = useState([]);
+  const [currentSet, setCurrentSet] = useState({
+    team1: Array(6).fill(null),
+    team2: Array(6).fill(null), 
+    reserve: null,
+    scoreTeam1: 0,
+    scoreTeam2: 0
+  });
+  const [selectedSet, setSelectedSet] = useState(null);
+  const [filterPlayer, setFilterPlayer] = useState('');
+  const [selectedPosition, setSelectedPosition] = useState(null);
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
   
@@ -561,6 +576,148 @@ export default function VolleyballApp() {
       return proposals;
     } catch (error) {
       console.error('Errore nel caricamento delle formazioni:', error);
+      return [];
+    }
+  };
+
+  // Set Management Functions
+  const initializeSetCreation = () => {
+    if (!selectedMatch || !selectedMatch.participants) return;
+    
+    // Metti tutti i partecipanti nella lista disponibili (stesso codice delle formazioni)
+    const players = selectedMatch.participants.map(p => ({
+      uid: p.uid,
+      name: p.customDisplayName || p.displayName,
+      friends: p.friends || []
+    }));
+    
+    // Aggiungi anche gli amici
+    const allPlayers = [];
+    players.forEach(player => {
+      allPlayers.push(player);
+      if (player.friends && player.friends.length > 0) {
+        player.friends.forEach(friend => {
+          allPlayers.push({
+            uid: `friend_${player.uid}_${friend}`,
+            name: friend,
+            isFriend: true,
+            parentUid: player.uid,
+            parentName: player.name
+          });
+        });
+      }
+    });
+    
+    setAvailablePlayers(allPlayers);
+    setCurrentSet({
+      team1: Array(6).fill(null),
+      team2: Array(6).fill(null), 
+      reserve: null,
+      scoreTeam1: 0,
+      scoreTeam2: 0
+    });
+  };
+
+  const submitSet = async () => {
+    if (!currentUser || !selectedMatch) return;
+    
+    try {
+      // Valida che ci siano almeno 12 giocatori posizionati
+      const placedPlayers = [
+        ...currentSet.team1.filter(p => p !== null),
+        ...currentSet.team2.filter(p => p !== null)
+      ];
+      
+      if (placedPlayers.length < 12) {
+        alert('Devi posizionare almeno 12 giocatori nelle due squadre!');
+        return;
+      }
+
+      if (currentSet.scoreTeam1 === 0 && currentSet.scoreTeam2 === 0) {
+        alert('Inserisci il punteggio del set!');
+        return;
+      }
+
+      const setData = {
+        matchId: selectedMatch.id,
+        teamA: currentSet.team1,
+        teamB: currentSet.team2,
+        reserve: currentSet.reserve,
+        teamAScore: currentSet.scoreTeam1,
+        teamBScore: currentSet.scoreTeam2,
+        createdBy: currentUser.uid,
+        createdByName: currentUser.displayName || currentUser.email,
+        createdAt: serverTimestamp(),
+        setNumber: matchSets.length + 1,
+        participantUids: [
+          ...currentSet.team1.filter(p => p && !p.uid.startsWith('friend_')).map(p => p.uid),
+          ...currentSet.team2.filter(p => p && !p.uid.startsWith('friend_')).map(p => p.uid),
+          ...(currentSet.reserve && !currentSet.reserve.uid.startsWith('friend_') ? [currentSet.reserve.uid] : [])
+        ]
+      };
+
+      await addDoc(collection(db, 'matchSets'), setData);
+      
+      // Aggiorna le statistiche dei giocatori
+      await updatePlayerSetStats(setData);
+      
+      alert('Set salvato con successo!');
+      
+      // Ricarica i set della partita
+      await loadMatchSets(selectedMatch.id);
+      
+      // Torna alla vista della partita
+      setCurrentView(VIEW_STATES.MATCH_DETAIL);
+    } catch (error) {
+      console.error('Errore nel salvataggio del set:', error);
+      alert('Errore nel salvataggio del set');
+    }
+  };
+
+  const updatePlayerSetStats = async (setData) => {
+    const team1Players = setData.teamA.filter(p => p !== null && !p.uid.startsWith('friend_'));
+    const team2Players = setData.teamB.filter(p => p !== null && !p.uid.startsWith('friend_'));
+    const winningTeam = setData.teamAScore > setData.teamBScore ? 'teamA' : 'teamB';
+    const pointDifference = Math.abs(setData.teamAScore - setData.teamBScore);
+
+    // Aggiorna statistiche team1
+    const team1Updates = team1Players.map(async (player) => {
+      const isWinner = winningTeam === 'teamA';
+      await updateDoc(doc(db, 'users', player.uid), {
+        'stats.setsPlayed': increment(1),
+        'stats.setsWon': increment(isWinner ? 1 : 0),
+        'stats.setsLost': increment(isWinner ? 0 : 1),
+        'stats.pointDifference': increment(isWinner ? pointDifference : -pointDifference)
+      });
+    });
+
+    // Aggiorna statistiche team2
+    const team2Updates = team2Players.map(async (player) => {
+      const isWinner = winningTeam === 'teamB';
+      await updateDoc(doc(db, 'users', player.uid), {
+        'stats.setsPlayed': increment(1),
+        'stats.setsWon': increment(isWinner ? 1 : 0),
+        'stats.setsLost': increment(isWinner ? 0 : 1),
+        'stats.pointDifference': increment(isWinner ? pointDifference : -pointDifference)
+      });
+    });
+
+    await Promise.allSettled([...team1Updates, ...team2Updates]);
+  };
+
+  const loadMatchSets = async (matchId) => {
+    try {
+      const q = query(
+        collection(db, 'matchSets'),
+        where('matchId', '==', matchId),
+        orderBy('setNumber', 'asc')
+      );
+      const snapshot = await getDocs(q);
+      const sets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMatchSets(sets);
+      return sets;
+    } catch (error) {
+      console.error('Errore nel caricamento dei set:', error);
       return [];
     }
   };
@@ -1083,11 +1240,47 @@ export default function VolleyballApp() {
     const sessionsSnap = await getDocs(q);
     const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+    // Load sets where user participated
+    const setsQuery = query(
+      collection(db, 'matchSets'),
+      where('participantUids', 'array-contains', uid),
+      orderBy('createdAt', 'desc')
+    );
+    const setsSnap = await getDocs(setsQuery);
+    const userSets = setsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Calculate set statistics
+    let setsWon = 0;
+    let setsLost = 0;
+    let totalPointsFor = 0;
+    let totalPointsAgainst = 0;
+
+    userSets.forEach(set => {
+      const userTeam = set.teamA.some(p => p.uid === uid) ? 'A' : 'B';
+      const userScore = userTeam === 'A' ? set.teamAScore : set.teamBScore;
+      const opponentScore = userTeam === 'A' ? set.teamBScore : set.teamAScore;
+      
+      totalPointsFor += userScore;
+      totalPointsAgainst += opponentScore;
+      
+      if (userScore > opponentScore) {
+        setsWon++;
+      } else if (userScore < opponentScore) {
+        setsLost++;
+      }
+    });
+
     setUserStats({
       totalSessions: user?.stats?.totalSessions || 0,
       asParticipant: user?.stats?.asParticipant || 0,
       asReserve: user?.stats?.asReserve || 0,
       friendsBrought: user?.stats?.friendsBrought || 0,
+      setsPlayed: userSets.length,
+      setsWon: setsWon,
+      setsLost: setsLost,
+      pointsFor: totalPointsFor,
+      pointsAgainst: totalPointsAgainst,
+      pointDifference: totalPointsFor - totalPointsAgainst,
       sessionsHistory: sessions,
     });
   };
@@ -1269,7 +1462,6 @@ export default function VolleyballApp() {
         const newEntry = {
           uid: currentUser.uid,
           name: customDisplayName || currentUser.displayName,
-          photoURL: currentUser.photoURL,
           friends,
           timestamp: new Date().toLocaleString('it-IT'),
         };
@@ -1572,7 +1764,7 @@ export default function VolleyballApp() {
   // Render header (consistent across all views)
   const renderHeader = () => (
     <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 mb-6 border border-gray-700">
-      <div className="flex items-center justify-between">
+      <div className="space-y-6">
         <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
           <div className="flex-shrink-0">
             <div className="text-4xl md:text-5xl">🏐</div>
@@ -1583,6 +1775,8 @@ export default function VolleyballApp() {
                currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
                currentView === VIEW_STATES.FORMATION_PROPOSAL ? 'Proponi Formazione' :
                currentView === VIEW_STATES.FORMATION_RESULT ? 'Formazioni Proposte' :
+               currentView === VIEW_STATES.ADD_SET ? 'Aggiungi Set' :
+               currentView === VIEW_STATES.SET_DETAIL ? 'Lista Set' :
                'Pallavolo - 7 fighters'}
             </h1>
             {/* Subtitle visible only for logged users */}
@@ -1608,6 +1802,10 @@ export default function VolleyballApp() {
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Crea la tua formazione ideale</div>
             ) : currentView === VIEW_STATES.FORMATION_RESULT ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Visualizza le formazioni calcolate</div>
+            ) : currentView === VIEW_STATES.ADD_SET ? (
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Registra un nuovo set giocato</div>
+            ) : currentView === VIEW_STATES.SET_DETAIL ? (
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Set registrati per questa partita</div>
             ) : currentView === VIEW_STATES.MATCH_LIST && sessionDate ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
@@ -2119,6 +2317,36 @@ export default function VolleyballApp() {
                 </p>
               </div>
             )}
+
+            {/* Pulsanti gestione set - solo per partecipanti e solo per partite attive */}
+            {selectedMatch && !isHistoricalMatch && isUserParticipant() && (
+              <div className="space-y-4">
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-100 mb-3">Gestione Set</h4>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={initializeSetCreation}
+                      className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
+                    >
+                      <span role="img" aria-label="set">🎯</span>
+                      Aggiungi Set
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentView(VIEW_STATES.SET_DETAIL)}
+                      className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                    >
+                      <span role="img" aria-label="lista-set">📋</span>
+                      Lista Set ({matchSets.length})
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Registra i set giocati e le formazioni utilizzate
+                  </p>
+                </div>
+              </div>
+            )}
             
             {isUserSignedUp() && (
               <button
@@ -2181,7 +2409,8 @@ export default function VolleyballApp() {
                               <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
                                 <div className="flex items-center gap-2">
                                   <span className="text-green-400">+</span>
-                                  {friend}
+                                  <span>{friend}</span>
+                                  <span className="text-xs text-gray-500">(Amico di {participant.name})</span>
                                 </div>
                                 {isAdmin && !isHistoricalMatch && (
                                   <button
@@ -2265,7 +2494,8 @@ export default function VolleyballApp() {
                                 <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
                                   <div className="flex items-center gap-2">
                                     <span className="text-amber-400">+</span>
-                                    {friend}
+                                    <span>{friend}</span>
+                                    <span className="text-xs text-gray-500">(Amico di {reserve.name})</span>
                                   </div>
                                   {isAdmin && (
                                     <button
@@ -2963,6 +3193,308 @@ export default function VolleyballApp() {
     );
   };
 
+  // Render add set view
+  const renderAddSetView = () => {
+    const renderPlayerSlot = (player, teamKey, position) => (
+      <div
+        className="min-h-[80px] border-2 border-dashed border-gray-600 rounded-lg p-3 bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition"
+        onClick={() => {
+          // Logica per selezionare un giocatore per questa posizione
+          setSelectedPosition({ team: teamKey, position });
+        }}
+      >
+        {player ? (
+          <div className="text-center">
+            <div className="font-medium text-gray-100">{player.name}</div>
+            <div className="text-xs text-gray-400">{player.uid.startsWith('friend_') ? 'Amico' : 'Utente'}</div>
+          </div>
+        ) : (
+          <div className="text-gray-500 text-sm">Clicca per selezionare</div>
+        )}
+      </div>
+    );
+
+    const renderTeamFormation = (teamKey, teamName) => (
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Rete */}
+          <div className="col-span-3 h-1 bg-gray-400 mb-2"></div>
+          
+          {/* Prima fila */}
+          {[3, 2, 1].map(pos => (
+            <div key={pos} className="flex flex-col items-center gap-2">
+              <div className="text-xs text-gray-400">P{pos + 1}</div>
+              {renderPlayerSlot(currentSet[teamKey][pos], teamKey, pos)}
+            </div>
+          ))}
+
+          {/* Seconda fila */}
+          {[4, 5, 0].map(pos => (
+            <div key={pos} className="flex flex-col items-center gap-2">
+              <div className="text-xs text-gray-400">P{pos + 1}</div>
+              {renderPlayerSlot(currentSet[teamKey][pos], teamKey, pos)}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h2 className="text-xl font-bold text-gray-100 mb-4">Aggiungi Nuovo Set</h2>
+          
+          {/* Informazioni del set */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div>
+              <label className="block text-sm text-gray-300 mb-2">Numero Set</label>
+              <input
+                type="number"
+                min="1"
+                value={currentSet.setNumber || ''}
+                onChange={(e) => setCurrentSet(prev => ({ ...prev, setNumber: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-300 mb-2">Punteggio Squadra A</label>
+              <input
+                type="number"
+                min="0"
+                value={currentSet.teamAScore || ''}
+                onChange={(e) => setCurrentSet(prev => ({ ...prev, teamAScore: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-300 mb-2">Punteggio Squadra B</label>
+              <input
+                type="number"
+                min="0"
+                value={currentSet.teamBScore || ''}
+                onChange={(e) => setCurrentSet(prev => ({ ...prev, teamBScore: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Formazioni */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {renderTeamFormation('team1', 'Squadra A')}
+            {renderTeamFormation('team2', 'Squadra B')}
+          </div>
+
+          {/* Riserva */}
+          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
+            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva</h3>
+            <div className="flex justify-center">
+              {renderPlayerSlot(currentSet.reserve, 'reserve', 0)}
+            </div>
+          </div>
+
+          {/* Lista giocatori disponibili */}
+          {selectedMatch && (
+            <div className="bg-gray-700 rounded-lg p-4 mb-6">
+              <h4 className="text-md font-semibold text-gray-100 mb-3">Giocatori Disponibili</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {selectedMatch.participants?.map(participant => (
+                  <button
+                    key={participant.uid}
+                    onClick={() => {
+                      if (selectedPosition) {
+                        const newSet = { ...currentSet };
+                        if (selectedPosition.team === 'reserve') {
+                          newSet.reserve = { ...participant, uid: participant.uid };
+                        } else {
+                          newSet[selectedPosition.team][selectedPosition.position] = { ...participant, uid: participant.uid };
+                        }
+                        setCurrentSet(newSet);
+                        setSelectedPosition(null);
+                      }
+                    }}
+                    className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-indigo-600 transition"
+                  >
+                    {participant.name}
+                  </button>
+                )) || []}
+                {/* Aggiungi anche gli amici */}
+                {selectedMatch.participants?.map(participant => 
+                  participant.friends?.map((friend, idx) => (
+                    <button
+                      key={`${participant.uid}_friend_${idx}`}
+                      onClick={() => {
+                        if (selectedPosition) {
+                          const newSet = { ...currentSet };
+                          const friendPlayer = { name: friend, uid: `friend_${participant.uid}_${idx}` };
+                          if (selectedPosition.team === 'reserve') {
+                            newSet.reserve = friendPlayer;
+                          } else {
+                            newSet[selectedPosition.team][selectedPosition.position] = friendPlayer;
+                          }
+                          setCurrentSet(newSet);
+                          setSelectedPosition(null);
+                        }
+                      }}
+                      className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-green-600 transition"
+                    >
+                      {friend} (Amico)
+                    </button>
+                  )) || []
+                ) || []}
+              </div>
+            </div>
+          )}
+
+          {/* Pulsanti di azione */}
+          <div className="flex gap-3">
+            <button
+              onClick={submitSet}
+              disabled={!currentSet.setNumber || !currentSet.teamAScore || !currentSet.teamBScore}
+              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Salva Set
+            </button>
+            <button
+              onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+              className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+            >
+              Annulla
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render set detail view
+  const renderSetDetailView = () => {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-100">Lista Set</h2>
+            
+            {/* Filtro giocatore */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-300">Filtra per giocatore:</label>
+              <select
+                value={filterPlayer || ''}
+                onChange={(e) => setFilterPlayer(e.target.value)}
+                className="px-3 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Tutti i giocatori</option>
+                {selectedMatch?.participants?.map(participant => (
+                  <option key={participant.uid} value={participant.uid}>
+                    {participant.name}
+                  </option>
+                )) || []}
+              </select>
+            </div>
+          </div>
+
+          {/* Lista set */}
+          {matchSets.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400">Nessun set registrato per questa partita</p>
+              <button
+                onClick={() => setCurrentView(VIEW_STATES.ADD_SET)}
+                className="mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
+              >
+                Aggiungi primo set
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {matchSets
+                .filter(set => !filterPlayer || 
+                  set.teamA.some(p => p.uid === filterPlayer) || 
+                  set.teamB.some(p => p.uid === filterPlayer) ||
+                  (set.reserve && set.reserve.uid === filterPlayer)
+                )
+                .map((set, index) => (
+                  <div key={set.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-semibold text-gray-100">
+                        Set {set.setNumber}
+                      </h3>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-gray-100">
+                          {set.teamAScore} - {set.teamBScore}
+                        </div>
+                        <div className="text-sm text-gray-400">
+                          {new Date(set.createdAt?.toDate ? set.createdAt.toDate() : set.createdAt).toLocaleString('it-IT')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Formazioni del set */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra A</h4>
+                        <div className="space-y-1">
+                          {set.teamA.map((player, idx) => (
+                            <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
+                              <span className="w-8 text-center">P{idx + 1}</span>
+                              <span>{player.name}</span>
+                              {player.uid.startsWith('friend_') && (
+                                <span className="text-xs text-gray-500">(Amico)</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra B</h4>
+                        <div className="space-y-1">
+                          {set.teamB.map((player, idx) => (
+                            <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
+                              <span className="w-8 text-center">P{idx + 1}</span>
+                              <span>{player.name}</span>
+                              {player.uid.startsWith('friend_') && (
+                                <span className="text-xs text-gray-500">(Amico)</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {set.reserve && (
+                      <div className="mt-3 pt-3 border-t border-gray-600">
+                        <div className="text-sm text-gray-300">
+                          <strong>Riserva:</strong> {set.reserve.name}
+                          {set.reserve.uid.startsWith('friend_') && (
+                            <span className="text-xs text-gray-500 ml-1">(Amico)</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* Pulsanti di azione */}
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => setCurrentView(VIEW_STATES.ADD_SET)}
+              className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
+            >
+              Aggiungi Set
+            </button>
+            <button
+              onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+              className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+            >
+              Torna alla partita
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render footer navigation (visible only for logged users)
   const renderFooter = () => {
     if (!isLoggedIn) return null;
@@ -3080,6 +3612,8 @@ export default function VolleyballApp() {
             {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
             {currentView === VIEW_STATES.USERS_LIST && renderUsersListView()}
             {currentView === VIEW_STATES.FORMATION_PROPOSAL && renderFormationProposalView()}
+            {currentView === VIEW_STATES.ADD_SET && renderAddSetView()}
+            {currentView === VIEW_STATES.SET_DETAIL && renderSetDetailView()}
             {currentView === VIEW_STATES.FORMATION_RESULT && renderFormationResultView()}
           </div>
         )}
