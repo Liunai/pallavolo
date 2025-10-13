@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings } from 'lucide-react';
+import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings, Plus } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
@@ -638,6 +638,11 @@ export default function VolleyballApp() {
       // Forza refresh delle liste per sicurezza
       await loadMatchHistory();
       
+      // Aggiorna le statistiche dell'utente corrente se era partecipante nella partita chiusa
+      if (currentUser && (participants.some(p => p.uid === currentUser.uid) || reserves.some(r => r.uid === currentUser.uid))) {
+        await loadUserStats(currentUser.uid);
+      }
+      
       // Se stavi visualizzando questa partita, torna alla home
       if (selectedMatch && selectedMatch.id === match.id) {
         setSelectedMatch(null);
@@ -938,6 +943,8 @@ export default function VolleyballApp() {
           lastUpdated: serverTimestamp(),
         });
       });
+      // Aggiorna le statistiche dell'utente che si è disiscritto
+      if (currentUser) await loadUserStats(currentUser.uid);
     } catch (e) {
       alert(e.message || 'Errore durante la disiscrizione');
     }
@@ -974,6 +981,11 @@ export default function VolleyballApp() {
           lastUpdated: serverTimestamp(),
         });
       });
+      
+      // Aggiorna le statistiche se l'utente corrente è stato rimosso
+      if (currentUser && currentUser.uid === userUid) {
+        await loadUserStats(currentUser.uid);
+      }
     } catch (e) {
       alert(e.message || 'Errore durante la rimozione');
     }
@@ -1015,6 +1027,11 @@ export default function VolleyballApp() {
           lastUpdated: serverTimestamp(),
         });
       });
+      
+      // Aggiorna le statistiche se è stato rimosso un amico dell'utente corrente
+      if (currentUser && currentUser.uid === userUid) {
+        await loadUserStats(currentUser.uid);
+      }
     } catch (e) {
       alert(e.message || 'Errore durante la rimozione dell\'amico');
     }
@@ -1126,6 +1143,11 @@ export default function VolleyballApp() {
           lastUpdated: serverTimestamp(),
         });
       });
+      
+      // Aggiorna le statistiche dell'utente promosso
+      if (currentUser && currentUser.uid === reserveUid) {
+        await loadUserStats(currentUser.uid);
+      }
       
       alert('Riserva promossa a partecipante con successo!');
     } catch (error) {
@@ -1266,8 +1288,47 @@ export default function VolleyballApp() {
   // Render no matches view
   const renderNoMatchesView = () => (
     <div className="flex flex-col items-center justify-center">
-      <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 w-full max-w-md text-center">
-        <div className="text-lg text-yellow-200 mb-6">Nessuna partita attiva, attendere che venga creata</div>
+      <div className="bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8 border border-gray-700 w-full max-w-lg text-center">
+        <div className="mb-6">
+          <div className="text-6xl mb-4">🏐</div>
+          <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-2">Nessuna partita attiva</h2>
+          <p className="text-gray-400">Al momento non ci sono partite programmate</p>
+        </div>
+        
+        {/* Se l'utente è admin, mostra il pulsante per creare partita */}
+        {isLoggedIn && isAdmin && (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Crea una nuova partita</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Data e ora della partita
+              </label>
+              <input
+                type="datetime-local"
+                value={nextSessionDate}
+                onChange={(e) => setNextSessionDate(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleNewSession}
+              disabled={isCreatingMatch}
+              className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isCreatingMatch ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-5 h-5" />
+                  Crea Partita
+                </>
+              )}
+            </button>
+          </div>
+        )}
         
         {/* Se l'utente non è loggato, mostra il pulsante di login */}
         {!isLoggedIn && (
@@ -1290,6 +1351,14 @@ export default function VolleyballApp() {
                 </>
               )}
             </button>
+          </div>
+        )}
+        
+        {/* Se l'utente è loggato ma non è admin, mostra messaggio informativo */}
+        {isLoggedIn && !isAdmin && (
+          <div className="text-gray-400 text-sm">
+            <p>Le partite vengono create dagli amministratori.</p>
+            <p>Sarai notificato quando sarà disponibile una nuova partita!</p>
           </div>
         )}
       </div>
@@ -1827,6 +1896,11 @@ export default function VolleyballApp() {
       // Rimuovi la sessione dallo storico
       await deleteDoc(doc(db, 'sessions', session.id));
       
+      // Aggiorna le statistiche dell'utente corrente se era partecipante nella partita riaperta
+      if (currentUser && (participants.some(p => p.uid === currentUser.uid) || reserves.some(r => r.uid === currentUser.uid))) {
+        await loadUserStats(currentUser.uid);
+      }
+      
       alert('Partita riaperta con successo! Statistiche aggiornate.');
       await loadMatchHistory();
     } catch (error) {
@@ -2019,10 +2093,6 @@ export default function VolleyballApp() {
                           <div className="text-center">
                             <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
                             <div className="text-gray-400">Partite</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-green-400">{user.stats?.asParticipant || 0}</div>
-                            <div className="text-gray-400">Part</div>
                           </div>
                           <div className="text-center">
                             <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
