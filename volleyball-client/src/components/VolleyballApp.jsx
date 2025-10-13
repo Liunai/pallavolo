@@ -77,7 +77,8 @@ export default function VolleyballApp() {
   const [currentFormation, setCurrentFormation] = useState({
     team1: Array(6).fill(null), // 6 posizioni: 1,2,3,4,5,6
     team2: Array(6).fill(null),
-    reserve: null // riserva tra posto 6 e 1
+    reserveTeam1: null, // riserva squadra A
+    reserveTeam2: null  // riserva squadra B
   });
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [draggedPlayer, setDraggedPlayer] = useState(null);
@@ -88,7 +89,8 @@ export default function VolleyballApp() {
   const [currentSet, setCurrentSet] = useState({
     team1: Array(6).fill(null),
     team2: Array(6).fill(null), 
-    reserve: null,
+    reserveTeam1: null,
+    reserveTeam2: null,
     scoreTeam1: 0,
     scoreTeam2: 0
   });
@@ -465,7 +467,8 @@ export default function VolleyballApp() {
     setCurrentFormation({
       team1: Array(6).fill(null),
       team2: Array(6).fill(null), 
-      reserve: null
+      reserveTeam1: null,
+      reserveTeam2: null
     });
   };
 
@@ -488,11 +491,11 @@ export default function VolleyballApp() {
     
     // Controlla se il giocatore era già posizionato da qualche parte
     Object.keys(newFormation).forEach(key => {
-      if (key === 'reserve') {
+      if (key === 'reserveTeam1' || key === 'reserveTeam2') {
         if (newFormation[key]?.uid === draggedPlayer.uid) {
           newFormation[key] = null;
         }
-      } else {
+      } else if (Array.isArray(newFormation[key])) {
         newFormation[key] = newFormation[key].map(player => 
           player?.uid === draggedPlayer.uid ? null : player
         );
@@ -500,8 +503,8 @@ export default function VolleyballApp() {
     });
 
     // Posiziona il giocatore nella nuova posizione
-    if (team === 'reserve') {
-      newFormation.reserve = draggedPlayer;
+    if (team === 'reserveTeam1' || team === 'reserveTeam2') {
+      newFormation[team] = draggedPlayer;
     } else {
       newFormation[team][position] = draggedPlayer;
     }
@@ -515,11 +518,11 @@ export default function VolleyballApp() {
     const newFormation = { ...currentFormation };
     
     Object.keys(newFormation).forEach(key => {
-      if (key === 'reserve') {
+      if (key === 'reserveTeam1' || key === 'reserveTeam2') {
         if (newFormation[key]?.uid === player.uid) {
           newFormation[key] = null;
         }
-      } else {
+      } else if (Array.isArray(newFormation[key])) {
         newFormation[key] = newFormation[key].map(p => 
           p?.uid === player.uid ? null : p
         );
@@ -544,11 +547,19 @@ export default function VolleyballApp() {
         return;
       }
 
+      // Converto la formazione nel formato atteso dal database mantenendo la compatibilità
+      const formationForDB = {
+        team1: currentFormation.team1,
+        team2: currentFormation.team2,
+        reserveTeam1: currentFormation.reserveTeam1,
+        reserveTeam2: currentFormation.reserveTeam2
+      };
+
       const proposal = {
         matchId: selectedMatch.id,
         userId: currentUser.uid,
         userName: customDisplayName || currentUser.displayName,
-        formation: currentFormation,
+        formation: formationForDB,
         submittedAt: serverTimestamp()
       };
 
@@ -738,6 +749,8 @@ export default function VolleyballApp() {
       formation.team1.forEach(player => player && allPlayers.add(player.uid));
       formation.team2.forEach(player => player && allPlayers.add(player.uid));
       if (formation.reserve) allPlayers.add(formation.reserve.uid);
+      if (formation.reserveTeam1) allPlayers.add(formation.reserveTeam1.uid);
+      if (formation.reserveTeam2) allPlayers.add(formation.reserveTeam2.uid);
     });
     
     const playersArray = Array.from(allPlayers);
@@ -777,11 +790,23 @@ export default function VolleyballApp() {
         }
       });
       
-      // Riserva
+      // Riserva (supporto per entrambi i formati)
       if (formation.reserve) {
         positionPreferences[formation.reserve.uid].reserve++;
         if (!positionPreferences[formation.reserve.uid].name) {
           positionPreferences[formation.reserve.uid].name = formation.reserve.name;
+        }
+      }
+      if (formation.reserveTeam1) {
+        positionPreferences[formation.reserveTeam1.uid].reserve++;
+        if (!positionPreferences[formation.reserveTeam1.uid].name) {
+          positionPreferences[formation.reserveTeam1.uid].name = formation.reserveTeam1.name;
+        }
+      }
+      if (formation.reserveTeam2) {
+        positionPreferences[formation.reserveTeam2.uid].reserve++;
+        if (!positionPreferences[formation.reserveTeam2.uid].name) {
+          positionPreferences[formation.reserveTeam2.uid].name = formation.reserveTeam2.name;
         }
       }
     });
@@ -833,27 +858,43 @@ export default function VolleyballApp() {
     const finalFormation = {
       team1: Array(6).fill(null),
       team2: Array(6).fill(null),
-      reserve: null
+      reserveTeam1: null,
+      reserveTeam2: null
     };
     
-    // Prima assegna le riserve (chi ha più preferenze per riserva)
-    let bestReserve = null;
-    let maxReserveScore = 0;
+    // Prima assegna le riserve (due riserve, una per squadra)
+    let bestReserveTeam1 = null;
+    let maxReserveScoreTeam1 = 0;
+    let bestReserveTeam2 = null;
+    let maxReserveScoreTeam2 = 0;
     
     playersArray.forEach(playerUid => {
       const reserveScore = positionPreferences[playerUid].reserve;
-      if (reserveScore > maxReserveScore) {
-        maxReserveScore = reserveScore;
-        bestReserve = playerUid;
+      if (reserveScore > maxReserveScoreTeam1) {
+        maxReserveScoreTeam2 = maxReserveScoreTeam1;
+        bestReserveTeam2 = bestReserveTeam1;
+        maxReserveScoreTeam1 = reserveScore;
+        bestReserveTeam1 = playerUid;
+      } else if (reserveScore > maxReserveScoreTeam2) {
+        maxReserveScoreTeam2 = reserveScore;
+        bestReserveTeam2 = playerUid;
       }
     });
     
-    if (bestReserve && maxReserveScore > 0) {
-      finalFormation.reserve = {
-        uid: bestReserve,
-        name: positionPreferences[bestReserve].name
+    if (bestReserveTeam1 && maxReserveScoreTeam1 > 0) {
+      finalFormation.reserveTeam1 = {
+        uid: bestReserveTeam1,
+        name: positionPreferences[bestReserveTeam1].name
       };
-      assignedPlayers.add(bestReserve);
+      assignedPlayers.add(bestReserveTeam1);
+    }
+    
+    if (bestReserveTeam2 && maxReserveScoreTeam2 > 0) {
+      finalFormation.reserveTeam2 = {
+        uid: bestReserveTeam2,
+        name: positionPreferences[bestReserveTeam2].name
+      };
+      assignedPlayers.add(bestReserveTeam2);
     }
     
     // Assegna le posizioni per ciascun team
@@ -935,11 +976,27 @@ export default function VolleyballApp() {
         }
       });
       
-      // Controlla riserva
-      totalPossible++;
-      if (formation.reserve && finalFormation.reserve && 
-          formation.reserve.uid === finalFormation.reserve.uid) {
-        totalMatches++;
+      // Controlla riserve (supporto per entrambi i formati)
+      if (formation.reserve && finalFormation.reserveTeam1) {
+        totalPossible++;
+        if (formation.reserve.uid === finalFormation.reserveTeam1.uid ||
+            formation.reserve.uid === finalFormation.reserveTeam2?.uid) {
+          totalMatches++;
+        }
+      }
+      if (formation.reserveTeam1) {
+        totalPossible++;
+        if (finalFormation.reserveTeam1 && 
+            formation.reserveTeam1.uid === finalFormation.reserveTeam1.uid) {
+          totalMatches++;
+        }
+      }
+      if (formation.reserveTeam2) {
+        totalPossible++;
+        if (finalFormation.reserveTeam2 && 
+            formation.reserveTeam2.uid === finalFormation.reserveTeam2.uid) {
+          totalMatches++;
+        }
       }
     });
     
@@ -2996,7 +3053,8 @@ export default function VolleyballApp() {
                   const isInFormation = 
                     currentFormation.team1.some(p => p?.uid === player.uid) ||
                     currentFormation.team2.some(p => p?.uid === player.uid) ||
-                    currentFormation.reserve?.uid === player.uid;
+                    currentFormation.reserveTeam1?.uid === player.uid ||
+                    currentFormation.reserveTeam2?.uid === player.uid;
                   return !isInFormation;
                 })
                 .map(player => renderPlayer(player))
@@ -3011,17 +3069,32 @@ export default function VolleyballApp() {
           {renderTeam('team2', 'Squadra B')}
         </div>
 
-        {/* Riserva */}
-        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva</h3>
-          <div className="flex justify-center">
-            <div 
-              className="flex flex-col items-center gap-2"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, 'reserve', null)}
-            >
-              <div className="text-xs text-gray-400">Giocatore di riserva</div>
-              {renderPlayer(currentFormation.reserve, handleReturnToAvailable)}
+        {/* Riserve per squadra */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva Squadra A</h3>
+            <div className="flex justify-center">
+              <div 
+                className="flex flex-col items-center gap-2"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'reserveTeam1', null)}
+              >
+                <div className="text-xs text-gray-400">Riserva A</div>
+                {renderPlayer(currentFormation.reserveTeam1, handleReturnToAvailable)}
+              </div>
+            </div>
+          </div>
+          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva Squadra B</h3>
+            <div className="flex justify-center">
+              <div 
+                className="flex flex-col items-center gap-2"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'reserveTeam2', null)}
+              >
+                <div className="text-xs text-gray-400">Riserva B</div>
+                {renderPlayer(currentFormation.reserveTeam2, handleReturnToAvailable)}
+              </div>
             </div>
           </div>
         </div>
