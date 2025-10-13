@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings, Plus } from 'lucide-react';
+import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings, Plus, Sun, Moon } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
@@ -48,6 +48,9 @@ export default function VolleyballApp() {
   const [customDisplayName, setCustomDisplayName] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempDisplayName, setTempDisplayName] = useState("");
+  
+  // Theme state
+  const [isDarkMode, setIsDarkMode] = useState(true);
   
   // States for viewing other users' stats
   const [showUserStatsModal, setShowUserStatsModal] = useState(false);
@@ -124,6 +127,20 @@ export default function VolleyballApp() {
     });
     return () => unsub();
   }, []);
+
+  // Load theme preference from localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('volleyball-theme');
+    if (savedTheme) {
+      setIsDarkMode(savedTheme === 'dark');
+    }
+  }, []);
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    localStorage.setItem('volleyball-theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
 
   // Ensure current session exists and subscribe to realtime updates
   useEffect(() => {
@@ -321,6 +338,11 @@ export default function VolleyballApp() {
     await signOut(auth);
     setIsLoggedIn(false);
     setCurrentUser(null);
+  };
+
+  // Theme toggle function
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
   };
 
   // Functions for custom display name
@@ -1160,9 +1182,9 @@ export default function VolleyballApp() {
   const renderHeader = () => (
     <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 mb-6 border border-gray-700">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-          <div className="bg-indigo-600 p-2 md:p-3 rounded-lg flex-shrink-0">
-            <div className="w-6 h-6 md:w-8 md:h-8 text-white text-lg md:text-2xl flex items-center justify-center">🏐</div>
+        <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+          <div className="flex-shrink-0">
+            <div className="text-4xl md:text-5xl">🏐</div>
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-xl md:text-3xl font-bold text-gray-100 truncate">
@@ -1203,19 +1225,19 @@ export default function VolleyballApp() {
             <span className="hidden md:block text-gray-100 font-medium truncate max-w-32">{customDisplayName || currentUser?.displayName}</span>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="p-1 md:p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 transition flex-shrink-0"
+              className="p-1 md:p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 hover:border-indigo-400 transition-all duration-200 flex-shrink-0 transform hover:scale-105"
               title="Area personale"
             >
               <img
                 src={currentUser.photoURL || ''}
                 alt={currentUser.displayName || ''}
-                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 object-cover ${
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 object-cover transition-all duration-200 ${
                   isAdmin ? 'border-blue-500 shadow-lg shadow-blue-500/30' : 'border-indigo-500'
                 }`}
               />
             </button>
             {showStats && userStats && (
-              <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-4 md:p-6 max-w-[90vw]">
+              <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-4 md:p-6 max-w-[90vw] animate-in slide-in-from-top-2 duration-200">
                 <h3 className="text-lg font-bold text-gray-100 mb-4 flex items-center gap-2">
                   <Award className="w-5 h-5 text-yellow-500" />
                   Le tue statistiche
@@ -1271,6 +1293,29 @@ export default function VolleyballApp() {
                     <div className="text-xs text-gray-400">Amici portati</div>
                   </div>
                 </div>
+                
+                {/* Theme toggle button */}
+                <div className="mt-4 p-3 bg-gray-700/30 rounded-lg border border-gray-600/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {isDarkMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-yellow-500" />}
+                      <span className="text-sm text-gray-100">Tema {isDarkMode ? 'Scuro' : 'Chiaro'}</span>
+                    </div>
+                    <button
+                      onClick={toggleTheme}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        isDarkMode ? 'bg-indigo-600' : 'bg-gray-400'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          isDarkMode ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+                
                 <button
                   onClick={handleLogout}
                   className="mt-4 w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600 text-sm"
