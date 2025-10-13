@@ -91,8 +91,8 @@ export default function VolleyballApp() {
     team2: Array(6).fill(null), 
     reserveTeam1: null,
     reserveTeam2: null,
-    scoreTeam1: 0,
-    scoreTeam2: 0
+    teamAScore: 0,
+    teamBScore: 0
   });
   const [selectedSet, setSelectedSet] = useState(null);
   const [filterPlayer, setFilterPlayer] = useState('');
@@ -530,6 +530,57 @@ export default function VolleyballApp() {
     });
 
     setCurrentFormation(newFormation);
+  };
+
+  // Funzioni per gestire il drag & drop dei set (simili alle formazioni)
+  const handleSetDrop = (e, team, position) => {
+    e.preventDefault();
+    const draggedPlayer = JSON.parse(e.dataTransfer.getData('text/plain'));
+    if (!draggedPlayer) return;
+
+    // Rimuovi il giocatore dalla posizione precedente
+    const newSet = { ...currentSet };
+    
+    // Controlla se il giocatore era già posizionato da qualche parte
+    Object.keys(newSet).forEach(key => {
+      if (key === 'reserveTeam1' || key === 'reserveTeam2') {
+        if (newSet[key]?.uid === draggedPlayer.uid) {
+          newSet[key] = null;
+        }
+      } else if (Array.isArray(newSet[key])) {
+        newSet[key] = newSet[key].map(player => 
+          player?.uid === draggedPlayer.uid ? null : player
+        );
+      }
+    });
+
+    // Posiziona il giocatore nella nuova posizione
+    if (team === 'reserveTeam1' || team === 'reserveTeam2') {
+      newSet[team] = draggedPlayer;
+    } else {
+      newSet[team][position] = draggedPlayer;
+    }
+
+    setCurrentSet(newSet);
+  };
+
+  const handleSetReturnToAvailable = (player) => {
+    // Rimuovi il giocatore dal set e rimettilo tra i disponibili
+    const newSet = { ...currentSet };
+    
+    Object.keys(newSet).forEach(key => {
+      if (key === 'reserveTeam1' || key === 'reserveTeam2') {
+        if (newSet[key]?.uid === player.uid) {
+          newSet[key] = null;
+        }
+      } else if (Array.isArray(newSet[key])) {
+        newSet[key] = newSet[key].map(p => 
+          p?.uid === player.uid ? null : p
+        );
+      }
+    });
+
+    setCurrentSet(newSet);
   };
 
   const submitFormationProposal = async () => {
@@ -3276,21 +3327,11 @@ export default function VolleyballApp() {
         className="min-h-[80px] border-2 border-dashed border-gray-600 rounded-lg p-3 bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
-          e.preventDefault();
-          const draggedPlayer = JSON.parse(e.dataTransfer.getData('text/plain'));
-          const newSet = { ...currentSet };
-          
           if (isReserve) {
-            if (teamKey === 'team1') {
-              newSet.reserveTeam1 = draggedPlayer;
-            } else {
-              newSet.reserveTeam2 = draggedPlayer;
-            }
+            handleSetDrop(e, teamKey === 'team1' ? 'reserveTeam1' : 'reserveTeam2', 0);
           } else {
-            newSet[teamKey][position] = draggedPlayer;
+            handleSetDrop(e, teamKey, position);
           }
-          
-          setCurrentSet(newSet);
         }}
         onClick={() => {
           if (!selectedPosition) return;
@@ -3303,6 +3344,10 @@ export default function VolleyballApp() {
             draggable
             onDragStart={(e) => {
               e.dataTransfer.setData('text/plain', JSON.stringify(player));
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetReturnToAvailable(player);
             }}
           >
             <div className="font-medium text-gray-100">{player.name}</div>
@@ -3408,7 +3453,15 @@ export default function VolleyballApp() {
             <div className="bg-gray-700 rounded-lg p-4 mb-6">
               <h4 className="text-md font-semibold text-gray-100 mb-3">Giocatori Disponibili (Trascina e Rilascia)</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {selectedMatch.participants?.map(participant => (
+                {selectedMatch.participants?.filter(participant => {
+                  // Escludi i giocatori già posizionati nel set
+                  const isInSet = 
+                    currentSet.team1.some(p => p?.uid === participant.uid) ||
+                    currentSet.team2.some(p => p?.uid === participant.uid) ||
+                    currentSet.reserveTeam1?.uid === participant.uid ||
+                    currentSet.reserveTeam2?.uid === participant.uid;
+                  return !isInSet;
+                }).map(participant => (
                   <div
                     key={participant.uid}
                     draggable
@@ -3422,7 +3475,16 @@ export default function VolleyballApp() {
                 )) || []}
                 {/* Aggiungi anche gli amici */}
                 {selectedMatch.participants?.map(participant => 
-                  participant.friends?.map((friend, idx) => (
+                  participant.friends?.filter((friend, idx) => {
+                    // Escludi gli amici già posizionati nel set
+                    const friendUid = `friend_${participant.uid}_${idx}`;
+                    const isInSet = 
+                      currentSet.team1.some(p => p?.uid === friendUid) ||
+                      currentSet.team2.some(p => p?.uid === friendUid) ||
+                      currentSet.reserveTeam1?.uid === friendUid ||
+                      currentSet.reserveTeam2?.uid === friendUid;
+                    return !isInSet;
+                  }).map((friend, idx) => (
                     <div
                       key={`${participant.uid}_friend_${idx}`}
                       draggable
