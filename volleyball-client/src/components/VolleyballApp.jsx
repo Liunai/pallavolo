@@ -612,10 +612,14 @@ export default function VolleyballApp() {
     setCurrentSet({
       team1: Array(6).fill(null),
       team2: Array(6).fill(null), 
-      reserve: null,
-      scoreTeam1: 0,
-      scoreTeam2: 0
+      reserveTeam1: null,
+      reserveTeam2: null,
+      setNumber: (matchSets.length || 0) + 1,
+      teamAScore: 0,
+      teamBScore: 0
     });
+    
+    setCurrentView(VIEW_STATES.ADD_SET);
   };
 
   const submitSet = async () => {
@@ -633,26 +637,28 @@ export default function VolleyballApp() {
         return;
       }
 
-      if (currentSet.scoreTeam1 === 0 && currentSet.scoreTeam2 === 0) {
+      if (currentSet.teamAScore === 0 && currentSet.teamBScore === 0) {
         alert('Inserisci il punteggio del set!');
         return;
       }
 
       const setData = {
         matchId: selectedMatch.id,
-        teamA: currentSet.team1,
-        teamB: currentSet.team2,
-        reserve: currentSet.reserve,
-        teamAScore: currentSet.scoreTeam1,
-        teamBScore: currentSet.scoreTeam2,
+        teamA: currentSet.team1.filter(p => p),
+        teamB: currentSet.team2.filter(p => p),
+        reserveTeamA: currentSet.reserveTeam1,
+        reserveTeamB: currentSet.reserveTeam2,
+        teamAScore: currentSet.teamAScore,
+        teamBScore: currentSet.teamBScore,
         createdBy: currentUser.uid,
         createdByName: currentUser.displayName || currentUser.email,
         createdAt: serverTimestamp(),
-        setNumber: matchSets.length + 1,
+        setNumber: currentSet.setNumber,
         participantUids: [
           ...currentSet.team1.filter(p => p && !p.uid.startsWith('friend_')).map(p => p.uid),
           ...currentSet.team2.filter(p => p && !p.uid.startsWith('friend_')).map(p => p.uid),
-          ...(currentSet.reserve && !currentSet.reserve.uid.startsWith('friend_') ? [currentSet.reserve.uid] : [])
+          ...(currentSet.reserveTeam1 && !currentSet.reserveTeam1.uid.startsWith('friend_') ? [currentSet.reserveTeam1.uid] : []),
+          ...(currentSet.reserveTeam2 && !currentSet.reserveTeam2.uid.startsWith('friend_') ? [currentSet.reserveTeam2.uid] : [])
         ]
       };
 
@@ -1763,14 +1769,14 @@ export default function VolleyballApp() {
 
   // Render header (consistent across all views)
   const renderHeader = () => (
-    <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 mb-6 border border-gray-700">
-      <div className="space-y-6">
-        <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+    <div className={`rounded-xl shadow-xl p-3 md:p-4 mb-4 border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
           <div className="flex-shrink-0">
-            <div className="text-4xl md:text-5xl">🏐</div>
+            <div className="text-2xl md:text-3xl">🏐</div>
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl md:text-3xl font-bold text-gray-100 truncate">
+            <h1 className={`text-lg md:text-2xl font-bold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
                currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
                currentView === VIEW_STATES.FORMATION_PROPOSAL ? 'Proponi Formazione' :
@@ -1816,38 +1822,52 @@ export default function VolleyballApp() {
         
         {/* User icon and name always visible when logged */}
         {isLoggedIn && (
-          <div className="relative flex items-center gap-2 md:gap-3 user-dropdown flex-shrink-0">
-            <span className="hidden md:block text-gray-100 font-medium truncate max-w-32">{customDisplayName || currentUser?.displayName}</span>
+          <div className="relative flex items-center gap-2 user-dropdown flex-shrink-0">
+            <span className={`hidden md:block font-medium truncate max-w-32 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              {customDisplayName || currentUser?.displayName}
+            </span>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="p-1 md:p-2 bg-gray-700 rounded-full border border-gray-600 hover:bg-gray-600 hover:border-indigo-400 transition-all duration-200 flex-shrink-0 transform hover:scale-105"
+              className={`p-1 rounded-full border transition-all duration-200 flex-shrink-0 transform hover:scale-105 ${
+                isDarkMode 
+                ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 hover:border-indigo-400' 
+                : 'bg-gray-100 border-gray-300 hover:bg-gray-200 hover:border-indigo-400'
+              }`}
               title="Area personale"
             >
               <img
                 src={currentUser.photoURL || ''}
                 alt={currentUser.displayName || ''}
-                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 object-cover transition-all duration-200 ${
+                className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 object-cover transition-all duration-200 ${
                   isAdmin ? 'border-blue-500 shadow-lg shadow-blue-500/30' : 'border-indigo-500'
                 }`}
               />
             </button>
             {showStats && userStats && (
-              <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-10 p-4 md:p-6 max-w-[90vw] animate-in slide-in-from-top-2 duration-200">
-                <h3 className="text-lg font-bold text-gray-100 mb-4 flex items-center gap-2">
+              <div className={`absolute right-0 top-full mt-2 w-80 md:w-96 rounded-lg shadow-xl border z-10 p-4 md:p-6 max-w-[90vw] animate-in slide-in-from-top-2 duration-200 ${
+                isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              }`}>
+                <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                   <Award className="w-5 h-5 text-yellow-500" />
                   Le tue statistiche
                 </h3>
                 
                 {/* Nome utente personalizzabile */}
-                <div className="mb-4 p-3 bg-gray-700/30 rounded-lg border border-gray-600/50">
-                  <div className="text-xs text-gray-400 mb-1">Nome visualizzato</div>
+                <div className={`mb-4 p-3 rounded-lg border ${
+                  isDarkMode ? 'bg-gray-700/30 border-gray-600/50' : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className={`text-xs mb-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Nome visualizzato</div>
                   {isEditingName ? (
                     <div className="space-y-2">
                       <input
                         type="text"
                         value={tempDisplayName}
                         onChange={(e) => setTempDisplayName(e.target.value)}
-                        className="w-full px-2 py-1 bg-gray-600 text-gray-100 rounded border border-gray-500 text-sm"
+                        className={`w-full px-2 py-1 rounded border text-sm ${
+                          isDarkMode 
+                          ? 'bg-gray-600 text-gray-100 border-gray-500' 
+                          : 'bg-white text-gray-900 border-gray-300'
+                        }`}
                         placeholder="Inserisci il tuo nome"
                         autoFocus
                       />
@@ -2158,20 +2178,7 @@ export default function VolleyballApp() {
 
     return (
       <div className="space-y-6">
-        {/* Header per partite storiche */}
-        {isHistoricalMatch && (
-          <div className="bg-gray-700 border border-gray-600 rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-gray-300 font-medium">Partita Storica - Solo Visualizzazione</span>
-            </div>
-            <p className="text-sm text-gray-400 mt-1">
-              Questa partita è stata completata e non è più possibile iscriversi o modificare i partecipanti.
-            </p>
-          </div>
-        )}
+        {/* Header rimosso per partite storiche */}
         
         {/* Pulsanti iscrizione/disiscrizione */}
         {canSignup && (
@@ -2318,35 +2325,7 @@ export default function VolleyballApp() {
               </div>
             )}
 
-            {/* Pulsanti gestione set - solo per partecipanti e solo per partite attive */}
-            {selectedMatch && !isHistoricalMatch && isUserParticipant() && (
-              <div className="space-y-4">
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-md font-semibold text-gray-100 mb-3">Gestione Set</h4>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={initializeSetCreation}
-                      className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
-                    >
-                      <span role="img" aria-label="set">🎯</span>
-                      Aggiungi Set
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentView(VIEW_STATES.SET_DETAIL)}
-                      className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-                    >
-                      <span role="img" aria-label="lista-set">📋</span>
-                      Lista Set ({matchSets.length})
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Registra i set giocati e le formazioni utilizzate
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* Pulsanti gestione set rimossi da qui - ora sono nelle partite storiche */}
             
             {isUserSignedUp() && (
               <button
@@ -2520,41 +2499,65 @@ export default function VolleyballApp() {
           )}
         </div>
         
-        {/* Pulsante Formazioni (solo per partite storiche e ex-partecipanti) */}
-        {isHistoricalMatch && selectedMatch && currentUser && 
-         selectedMatch.participants && 
-         selectedMatch.participants.some(p => p.uid === currentUser.uid) && (
-          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-            <h3 className="text-lg font-bold text-gray-100 mb-4">Proponi Formazione</h3>
-            <p className="text-gray-400 mb-4">
-              Questa partita è stata completata. Puoi proporre la tua formazione ideale per vedere come avresti organizzato le squadre.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setCurrentView(VIEW_STATES.FORMATION_PROPOSAL);
-                }}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Proponi Formazione
-              </button>
-              {formationProposals.length >= 3 && (
+        {/* Sezione per partite storiche con formazioni e gestione set */}
+        {isHistoricalMatch && selectedMatch && currentUser && (
+          <div className="space-y-6">
+            {/* Pulsanti gestione set per partite storiche */}
+            <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+              <h3 className="text-lg font-bold text-gray-100 mb-4">Gestione Set</h3>
+              <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setCurrentView(VIEW_STATES.FORMATION_RESULT);
-                  }}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2"
+                  type="button"
+                  onClick={() => initializeSetCreation()}
+                  className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Vedi Formazioni ({formationProposals.length})
+                  <span role="img" aria-label="set">🎯</span>
+                  Aggiungi Set
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView(VIEW_STATES.SET_DETAIL)}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <span role="img" aria-label="lista-set">📋</span>
+                  Lista Set ({matchSets.length})
+                </button>
+              </div>
             </div>
+
+            {/* Pulsante Formazioni Beta (solo per ex-partecipanti) */}
+            {selectedMatch.participants && 
+             selectedMatch.participants.some(p => p.uid === currentUser.uid) && (
+              <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setCurrentView(VIEW_STATES.FORMATION_PROPOSAL);
+                    }}
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Proponi Formazione
+                    <span className="ml-2 px-2 py-1 bg-orange-500 text-white text-xs rounded-full">Beta</span>
+                  </button>
+                  {formationProposals.length >= 3 && (
+                    <button
+                      onClick={() => {
+                        setCurrentView(VIEW_STATES.FORMATION_RESULT);
+                      }}
+                      className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Vedi Formazioni ({formationProposals.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -3195,21 +3198,45 @@ export default function VolleyballApp() {
 
   // Render add set view
   const renderAddSetView = () => {
-    const renderPlayerSlot = (player, teamKey, position) => (
+    const renderPlayerSlot = (player, teamKey, position, isReserve = false) => (
       <div
         className="min-h-[80px] border-2 border-dashed border-gray-600 rounded-lg p-3 bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const draggedPlayer = JSON.parse(e.dataTransfer.getData('text/plain'));
+          const newSet = { ...currentSet };
+          
+          if (isReserve) {
+            if (teamKey === 'team1') {
+              newSet.reserveTeam1 = draggedPlayer;
+            } else {
+              newSet.reserveTeam2 = draggedPlayer;
+            }
+          } else {
+            newSet[teamKey][position] = draggedPlayer;
+          }
+          
+          setCurrentSet(newSet);
+        }}
         onClick={() => {
-          // Logica per selezionare un giocatore per questa posizione
-          setSelectedPosition({ team: teamKey, position });
+          if (!selectedPosition) return;
+          setSelectedPosition(isReserve ? { team: teamKey, isReserve: true } : { team: teamKey, position });
         }}
       >
         {player ? (
-          <div className="text-center">
+          <div 
+            className="text-center cursor-move"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/plain', JSON.stringify(player));
+            }}
+          >
             <div className="font-medium text-gray-100">{player.name}</div>
             <div className="text-xs text-gray-400">{player.uid.startsWith('friend_') ? 'Amico' : 'Utente'}</div>
           </div>
         ) : (
-          <div className="text-gray-500 text-sm">Clicca per selezionare</div>
+          <div className="text-gray-500 text-sm">Trascina qui un giocatore</div>
         )}
       </div>
     );
@@ -3279,67 +3306,61 @@ export default function VolleyballApp() {
             </div>
           </div>
 
-          {/* Formazioni */}
+          {/* Formazioni con riserve integrate */}
           <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {renderTeamFormation('team1', 'Squadra A')}
-            {renderTeamFormation('team2', 'Squadra B')}
-          </div>
-
-          {/* Riserva */}
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
-            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva</h3>
-            <div className="flex justify-center">
-              {renderPlayerSlot(currentSet.reserve, 'reserve', 0)}
+            <div className="space-y-4">
+              {renderTeamFormation('team1', 'Squadra A')}
+              {/* Riserva Squadra A */}
+              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra A</h4>
+                <div className="flex justify-center">
+                  {renderPlayerSlot(currentSet.reserveTeam1, 'team1', 0, true)}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {renderTeamFormation('team2', 'Squadra B')}
+              {/* Riserva Squadra B */}
+              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra B</h4>
+                <div className="flex justify-center">
+                  {renderPlayerSlot(currentSet.reserveTeam2, 'team2', 0, true)}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Lista giocatori disponibili */}
+          {/* Lista giocatori disponibili per drag & drop */}
           {selectedMatch && (
             <div className="bg-gray-700 rounded-lg p-4 mb-6">
-              <h4 className="text-md font-semibold text-gray-100 mb-3">Giocatori Disponibili</h4>
+              <h4 className="text-md font-semibold text-gray-100 mb-3">Giocatori Disponibili (Trascina e Rilascia)</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {selectedMatch.participants?.map(participant => (
-                  <button
+                  <div
                     key={participant.uid}
-                    onClick={() => {
-                      if (selectedPosition) {
-                        const newSet = { ...currentSet };
-                        if (selectedPosition.team === 'reserve') {
-                          newSet.reserve = { ...participant, uid: participant.uid };
-                        } else {
-                          newSet[selectedPosition.team][selectedPosition.position] = { ...participant, uid: participant.uid };
-                        }
-                        setCurrentSet(newSet);
-                        setSelectedPosition(null);
-                      }
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', JSON.stringify({ ...participant, uid: participant.uid }));
                     }}
-                    className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-indigo-600 transition"
+                    className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-indigo-600 transition cursor-move border border-gray-500"
                   >
                     {participant.name}
-                  </button>
+                  </div>
                 )) || []}
                 {/* Aggiungi anche gli amici */}
                 {selectedMatch.participants?.map(participant => 
                   participant.friends?.map((friend, idx) => (
-                    <button
+                    <div
                       key={`${participant.uid}_friend_${idx}`}
-                      onClick={() => {
-                        if (selectedPosition) {
-                          const newSet = { ...currentSet };
-                          const friendPlayer = { name: friend, uid: `friend_${participant.uid}_${idx}` };
-                          if (selectedPosition.team === 'reserve') {
-                            newSet.reserve = friendPlayer;
-                          } else {
-                            newSet[selectedPosition.team][selectedPosition.position] = friendPlayer;
-                          }
-                          setCurrentSet(newSet);
-                          setSelectedPosition(null);
-                        }
+                      draggable
+                      onDragStart={(e) => {
+                        const friendPlayer = { name: friend, uid: `friend_${participant.uid}_${idx}` };
+                        e.dataTransfer.setData('text/plain', JSON.stringify(friendPlayer));
                       }}
-                      className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-green-600 transition"
+                      className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-green-600 transition cursor-move border border-green-500"
                     >
                       {friend} (Amico)
-                    </button>
+                    </div>
                   )) || []
                 ) || []}
               </div>
@@ -3430,37 +3451,62 @@ export default function VolleyballApp() {
 
                     {/* Formazioni del set */}
                     <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra A</h4>
-                        <div className="space-y-1">
-                          {set.teamA.map((player, idx) => (
-                            <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
-                              <span className="w-8 text-center">P{idx + 1}</span>
-                              <span>{player.name}</span>
-                              {player.uid.startsWith('friend_') && (
-                                <span className="text-xs text-gray-500">(Amico)</span>
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra A</h4>
+                          <div className="space-y-1">
+                            {set.teamA.map((player, idx) => (
+                              <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
+                                <span className="w-8 text-center">P{idx + 1}</span>
+                                <span>{player.name}</span>
+                                {player.uid.startsWith('friend_') && (
+                                  <span className="text-xs text-gray-500">(Amico)</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {set.reserveTeamA && (
+                          <div className="pt-2 border-t border-gray-600">
+                            <div className="text-sm text-gray-300">
+                              <strong>Riserva A:</strong> {set.reserveTeamA.name}
+                              {set.reserveTeamA.uid.startsWith('friend_') && (
+                                <span className="text-xs text-gray-500 ml-1">(Amico)</span>
                               )}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra B</h4>
-                        <div className="space-y-1">
-                          {set.teamB.map((player, idx) => (
-                            <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
-                              <span className="w-8 text-center">P{idx + 1}</span>
-                              <span>{player.name}</span>
-                              {player.uid.startsWith('friend_') && (
-                                <span className="text-xs text-gray-500">(Amico)</span>
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="text-md font-semibold text-gray-200 mb-2">Squadra B</h4>
+                          <div className="space-y-1">
+                            {set.teamB.map((player, idx) => (
+                              <div key={idx} className="text-sm text-gray-300 flex items-center gap-2">
+                                <span className="w-8 text-center">P{idx + 1}</span>
+                                <span>{player.name}</span>
+                                {player.uid.startsWith('friend_') && (
+                                  <span className="text-xs text-gray-500">(Amico)</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {set.reserveTeamB && (
+                          <div className="pt-2 border-t border-gray-600">
+                            <div className="text-sm text-gray-300">
+                              <strong>Riserva B:</strong> {set.reserveTeamB.name}
+                              {set.reserveTeamB.uid.startsWith('friend_') && (
+                                <span className="text-xs text-gray-500 ml-1">(Amico)</span>
                               )}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {set.reserve && (
+                    {/* Retrocompatibilità per la vecchia riserva unica */}
+                    {set.reserve && !set.reserveTeamA && !set.reserveTeamB && (
                       <div className="mt-3 pt-3 border-t border-gray-600">
                         <div className="text-sm text-gray-300">
                           <strong>Riserva:</strong> {set.reserve.name}
@@ -3576,7 +3622,7 @@ export default function VolleyballApp() {
 
   // Main render function
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-3 md:p-6 pb-24">
+    <div className={`min-h-screen p-3 md:p-6 pb-24 ${isDarkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800' : 'bg-gradient-to-br from-blue-50 to-indigo-100'}`}>
       <div className="max-w-6xl mx-auto">
         {renderHeader()}
         
