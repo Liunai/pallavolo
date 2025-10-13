@@ -532,10 +532,14 @@ export default function VolleyballApp() {
     setCurrentFormation(newFormation);
   };
 
-  // Funzioni per gestire il drag & drop dei set (simili alle formazioni)
+  // Funzioni per i set - identiche alle formazioni
+  const handleSetDragStart = (e, player) => {
+    setDraggedPlayer(player);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
   const handleSetDrop = (e, team, position) => {
     e.preventDefault();
-    const draggedPlayer = JSON.parse(e.dataTransfer.getData('text/plain'));
     if (!draggedPlayer) return;
 
     // Rimuovi il giocatore dalla posizione precedente
@@ -562,6 +566,7 @@ export default function VolleyballApp() {
     }
 
     setCurrentSet(newSet);
+    setDraggedPlayer(null);
   };
 
   const handleSetReturnToAvailable = (player) => {
@@ -3322,68 +3327,96 @@ export default function VolleyballApp() {
 
   // Render add set view
   const renderAddSetView = () => {
-    const renderPlayerSlot = (player, teamKey, position, isReserve = false) => (
+    // Render player for sets - identico al sistema delle formazioni
+    const renderPlayerForSet = (player, onClick = null) => (
       <div
-        className="min-h-[80px] border-2 border-dashed border-gray-600 rounded-lg p-3 bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 transition"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          if (isReserve) {
-            handleSetDrop(e, teamKey === 'team1' ? 'reserveTeam1' : 'reserveTeam2', 0);
-          } else {
-            handleSetDrop(e, teamKey, position);
-          }
-        }}
-        onClick={() => {
-          if (!selectedPosition) return;
-          setSelectedPosition(isReserve ? { team: teamKey, isReserve: true } : { team: teamKey, position });
-        }}
+        key={player?.uid || 'empty'}
+        className={`h-16 w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-xs transition-all duration-200 ${
+          player 
+            ? 'bg-indigo-600 text-white border-solid border-indigo-500 cursor-pointer hover:bg-indigo-700' 
+            : 'bg-gray-700/30 text-gray-400'
+        }`}
+        draggable={!!player}
+        onDragStart={(e) => player && handleSetDragStart(e, player)}
+        onDragOver={handleDragOver}
+        onDrop={(e) => !player && handleSetDrop(e, 'available', null)}
+        onClick={() => player && onClick && onClick(player)}
       >
         {player ? (
-          <div 
-            className="text-center cursor-move"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('text/plain', JSON.stringify(player));
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSetReturnToAvailable(player);
-            }}
-          >
-            <div className="font-medium text-gray-100">{player.name}</div>
-            <div className="text-xs text-gray-400">{player.uid.startsWith('friend_') ? 'Amico' : 'Utente'}</div>
+          <div className="p-1">
+            <div className="font-medium">{player.name}</div>
+            {player.isFriend && <div className="text-xs opacity-75">Amico</div>}
           </div>
         ) : (
-          <div className="text-gray-500 text-sm">Trascina qui un giocatore</div>
+          <div className="text-gray-500">Vuoto</div>
         )}
       </div>
     );
 
-    const renderTeamFormation = (teamKey, teamName) => (
+    // Render formazione squadra per set - identico alle formazioni
+    const renderSetTeamFormation = (teamKey, teamName) => (
       <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
         <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
         <div className="grid grid-cols-3 gap-3">
-          {/* Rete */}
+          {/* Rete (rappresentata come linea) */}
           <div className="col-span-3 h-1 bg-gray-400 mb-2"></div>
           
           {/* Prima fila */}
-          {[3, 2, 1].map(pos => (
-            <div key={pos} className="flex flex-col items-center gap-2">
-              <div className="text-xs text-gray-400">P{pos + 1}</div>
-              {renderPlayerSlot(currentSet[teamKey][pos], teamKey, pos)}
-            </div>
-          ))}
-
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 3)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[3]}</div>
+            {renderPlayerForSet(currentSet[teamKey][3], handleSetReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 2)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[2]}</div>
+            {renderPlayerForSet(currentSet[teamKey][2], handleSetReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 1)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[1]}</div>
+            {renderPlayerForSet(currentSet[teamKey][1], handleSetReturnToAvailable)}
+          </div>
+          
           {/* Seconda fila */}
-          {[4, 5, 0].map(pos => (
-            <div key={pos} className="flex flex-col items-center gap-2">
-              <div className="text-xs text-gray-400">P{pos + 1}</div>
-              {renderPlayerSlot(currentSet[teamKey][pos], teamKey, pos)}
-            </div>
-          ))}
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 4)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[4]}</div>
+            {renderPlayerForSet(currentSet[teamKey][4], handleSetReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 5)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[5]}</div>
+            {renderPlayerForSet(currentSet[teamKey][5], handleSetReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleSetDrop(e, teamKey, 0)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[0]}</div>
+            {renderPlayerForSet(currentSet[teamKey][0], handleSetReturnToAvailable)}
+          </div>
         </div>
       </div>
     );
+
+
 
     return (
       <div className="space-y-6">
@@ -3427,22 +3460,30 @@ export default function VolleyballApp() {
           {/* Formazioni con riserve integrate */}
           <div className="grid md:grid-cols-2 gap-6 mb-6">
             <div className="space-y-4">
-              {renderTeamFormation('team1', 'Squadra A')}
+              {renderSetTeamFormation('team1', 'Squadra A')}
               {/* Riserva Squadra A */}
               <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                 <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra A</h4>
-                <div className="flex justify-center">
-                  {renderPlayerSlot(currentSet.reserveTeam1, 'team1', 0, true)}
+                <div 
+                  className="flex justify-center"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleSetDrop(e, 'reserveTeam1', 0)}
+                >
+                  {renderPlayerForSet(currentSet.reserveTeam1, handleSetReturnToAvailable)}
                 </div>
               </div>
             </div>
             <div className="space-y-4">
-              {renderTeamFormation('team2', 'Squadra B')}
+              {renderSetTeamFormation('team2', 'Squadra B')}
               {/* Riserva Squadra B */}
               <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                 <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra B</h4>
-                <div className="flex justify-center">
-                  {renderPlayerSlot(currentSet.reserveTeam2, 'team2', 0, true)}
+                <div 
+                  className="flex justify-center"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleSetDrop(e, 'reserveTeam2', 0)}
+                >
+                  {renderPlayerForSet(currentSet.reserveTeam2, handleSetReturnToAvailable)}
                 </div>
               </div>
             </div>
