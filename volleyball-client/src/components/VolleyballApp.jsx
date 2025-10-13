@@ -28,7 +28,9 @@ const VIEW_STATES = {
   MATCH_LIST: 'match_list', 
   MATCH_DETAIL: 'match_detail',
   MATCH_HISTORY: 'match_history',
-  USERS_LIST: 'users_list'
+  USERS_LIST: 'users_list',
+  FORMATION_PROPOSAL: 'formation_proposal',
+  FORMATION_RESULT: 'formation_result'
 };
 
 export default function VolleyballApp() {
@@ -67,6 +69,17 @@ export default function VolleyballApp() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
   const [activeMatches, setActiveMatches] = useState([]); // Lista di tutte le partite attive
+
+  // Formation proposal states
+  const [formationProposals, setFormationProposals] = useState([]);
+  const [currentFormation, setCurrentFormation] = useState({
+    team1: Array(6).fill(null), // 6 posizioni: 1,2,3,4,5,6
+    team2: Array(6).fill(null),
+    reserve: null // riserva tra posto 6 e 1
+  });
+  const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [draggedPlayer, setDraggedPlayer] = useState(null);
+  const [calculatedFormations, setCalculatedFormations] = useState(null);
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
   
@@ -405,6 +418,384 @@ export default function VolleyballApp() {
       alert('Errore nel caricamento delle statistiche');
     }
   };
+
+  // Formation management functions
+  const initializeFormationProposal = () => {
+    if (!selectedMatch || !selectedMatch.participants) return;
+    
+    // Metti tutti i partecipanti nella lista disponibili
+    const players = selectedMatch.participants.map(p => ({
+      uid: p.uid,
+      name: p.customDisplayName || p.displayName,
+      friends: p.friends || []
+    }));
+    
+    // Aggiungi anche gli amici
+    const allPlayers = [];
+    players.forEach(player => {
+      allPlayers.push(player);
+      if (player.friends && player.friends.length > 0) {
+        player.friends.forEach(friend => {
+          allPlayers.push({
+            uid: `friend_${player.uid}_${friend}`,
+            name: friend,
+            isFriend: true,
+            parentUid: player.uid
+          });
+        });
+      }
+    });
+    
+    setAvailablePlayers(allPlayers);
+    setCurrentFormation({
+      team1: Array(6).fill(null),
+      team2: Array(6).fill(null), 
+      reserve: null
+    });
+  };
+
+  const handleDragStart = (e, player) => {
+    setDraggedPlayer(player);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, team, position) => {
+    e.preventDefault();
+    if (!draggedPlayer) return;
+
+    // Rimuovi il giocatore dalla posizione precedente
+    const newFormation = { ...currentFormation };
+    
+    // Controlla se il giocatore era già posizionato da qualche parte
+    Object.keys(newFormation).forEach(key => {
+      if (key === 'reserve') {
+        if (newFormation[key]?.uid === draggedPlayer.uid) {
+          newFormation[key] = null;
+        }
+      } else {
+        newFormation[key] = newFormation[key].map(player => 
+          player?.uid === draggedPlayer.uid ? null : player
+        );
+      }
+    });
+
+    // Posiziona il giocatore nella nuova posizione
+    if (team === 'reserve') {
+      newFormation.reserve = draggedPlayer;
+    } else {
+      newFormation[team][position] = draggedPlayer;
+    }
+
+    setCurrentFormation(newFormation);
+    setDraggedPlayer(null);
+  };
+
+  const handleReturnToAvailable = (player) => {
+    // Rimuovi il giocatore dalla formazione e rimettilo tra i disponibili
+    const newFormation = { ...currentFormation };
+    
+    Object.keys(newFormation).forEach(key => {
+      if (key === 'reserve') {
+        if (newFormation[key]?.uid === player.uid) {
+          newFormation[key] = null;
+        }
+      } else {
+        newFormation[key] = newFormation[key].map(p => 
+          p?.uid === player.uid ? null : p
+        );
+      }
+    });
+
+    setCurrentFormation(newFormation);
+  };
+
+  const submitFormationProposal = async () => {
+    if (!currentUser || !selectedMatch) return;
+    
+    try {
+      // Valida che ci siano almeno 12 giocatori posizionati
+      const placedPlayers = [
+        ...currentFormation.team1.filter(p => p !== null),
+        ...currentFormation.team2.filter(p => p !== null)
+      ];
+      
+      if (placedPlayers.length < 12) {
+        alert('Devi posizionare almeno 12 giocatori nelle due squadre!');
+        return;
+      }
+
+      const proposal = {
+        matchId: selectedMatch.id,
+        userId: currentUser.uid,
+        userName: customDisplayName || currentUser.displayName,
+        formation: currentFormation,
+        submittedAt: serverTimestamp()
+      };
+
+      await setDoc(
+        doc(db, 'formationProposals', `${selectedMatch.id}_${currentUser.uid}`),
+        proposal
+      );
+
+      alert('Formazione proposta salvata con successo!');
+    } catch (error) {
+      console.error('Errore nel salvataggio della formazione:', error);
+      alert('Errore nel salvataggio della formazione');
+    }
+  };
+
+  const loadFormationProposals = async (matchId) => {
+    try {
+      const q = query(
+        collection(db, 'formationProposals'),
+        where('matchId', '==', matchId)
+      );
+      const snapshot = await getDocs(q);
+      const proposals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFormationProposals(proposals);
+      return proposals;
+    } catch (error) {
+      console.error('Errore nel caricamento delle formazioni:', error);
+      return [];
+    }
+  };
+
+  const calculateOptimalFormations = (proposals) => {
+    if (proposals.length < 3) return null;
+    
+    // Raccoglie tutti i giocatori unici dalle proposte
+    const allPlayers = new Set();
+    proposals.forEach(proposal => {
+      const formation = proposal.formation;
+      formation.team1.forEach(player => player && allPlayers.add(player.uid));
+      formation.team2.forEach(player => player && allPlayers.add(player.uid));
+      if (formation.reserve) allPlayers.add(formation.reserve.uid);
+    });
+    
+    const playersArray = Array.from(allPlayers);
+    
+    // Calcola le preferenze di posizione per ogni giocatore
+    const positionPreferences = {};
+    playersArray.forEach(playerUid => {
+      positionPreferences[playerUid] = {
+        team1: Array(6).fill(0),
+        team2: Array(6).fill(0),
+        reserve: 0,
+        name: ''
+      };
+    });
+    
+    // Analizza tutte le proposte per calcolare le preferenze
+    proposals.forEach(proposal => {
+      const formation = proposal.formation;
+      
+      // Team 1
+      formation.team1.forEach((player, position) => {
+        if (player) {
+          positionPreferences[player.uid].team1[position]++;
+          if (!positionPreferences[player.uid].name) {
+            positionPreferences[player.uid].name = player.name;
+          }
+        }
+      });
+      
+      // Team 2
+      formation.team2.forEach((player, position) => {
+        if (player) {
+          positionPreferences[player.uid].team2[position]++;
+          if (!positionPreferences[player.uid].name) {
+            positionPreferences[player.uid].name = player.name;
+          }
+        }
+      });
+      
+      // Riserva
+      if (formation.reserve) {
+        positionPreferences[formation.reserve.uid].reserve++;
+        if (!positionPreferences[formation.reserve.uid].name) {
+          positionPreferences[formation.reserve.uid].name = formation.reserve.name;
+        }
+      }
+    });
+    
+    // Analizza le co-occorrenze (giocatori che spesso giocano insieme)
+    const coOccurrences = {};
+    playersArray.forEach(p1 => {
+      coOccurrences[p1] = {};
+      playersArray.forEach(p2 => {
+        if (p1 !== p2) {
+          coOccurrences[p1][p2] = { sameTeam: 0, oppositeTeam: 0 };
+        }
+      });
+    });
+    
+    proposals.forEach(proposal => {
+      const formation = proposal.formation;
+      const team1Players = formation.team1.filter(p => p).map(p => p.uid);
+      const team2Players = formation.team2.filter(p => p).map(p => p.uid);
+      
+      // Co-occorrenze stesso team
+      team1Players.forEach(p1 => {
+        team1Players.forEach(p2 => {
+          if (p1 !== p2) {
+            coOccurrences[p1][p2].sameTeam++;
+          }
+        });
+      });
+      
+      team2Players.forEach(p1 => {
+        team2Players.forEach(p2 => {
+          if (p1 !== p2) {
+            coOccurrences[p1][p2].sameTeam++;
+          }
+        });
+      });
+      
+      // Co-occorrenze team opposti
+      team1Players.forEach(p1 => {
+        team2Players.forEach(p2 => {
+          coOccurrences[p1][p2].oppositeTeam++;
+          coOccurrences[p2][p1].oppositeTeam++;
+        });
+      });
+    });
+    
+    // Algoritmo di assegnazione ottimale
+    const assignedPlayers = new Set();
+    const finalFormation = {
+      team1: Array(6).fill(null),
+      team2: Array(6).fill(null),
+      reserve: null
+    };
+    
+    // Prima assegna le riserve (chi ha più preferenze per riserva)
+    let bestReserve = null;
+    let maxReserveScore = 0;
+    
+    playersArray.forEach(playerUid => {
+      const reserveScore = positionPreferences[playerUid].reserve;
+      if (reserveScore > maxReserveScore) {
+        maxReserveScore = reserveScore;
+        bestReserve = playerUid;
+      }
+    });
+    
+    if (bestReserve && maxReserveScore > 0) {
+      finalFormation.reserve = {
+        uid: bestReserve,
+        name: positionPreferences[bestReserve].name
+      };
+      assignedPlayers.add(bestReserve);
+    }
+    
+    // Assegna le posizioni per ciascun team
+    ['team1', 'team2'].forEach(teamKey => {
+      for (let position = 0; position < 6; position++) {
+        let bestPlayer = null;
+        let maxScore = 0;
+        
+        playersArray.forEach(playerUid => {
+          if (assignedPlayers.has(playerUid)) return;
+          
+          let score = positionPreferences[playerUid][teamKey][position];
+          
+          // Bonus per co-occorrenze con giocatori già nel team
+          const currentTeamPlayers = finalFormation[teamKey]
+            .filter(p => p !== null)
+            .map(p => p.uid);
+          
+          currentTeamPlayers.forEach(teammateUid => {
+            score += coOccurrences[playerUid][teammateUid].sameTeam * 0.5;
+          });
+          
+          // Penalità per opposizioni con giocatori nell'altro team
+          const otherTeamKey = teamKey === 'team1' ? 'team2' : 'team1';
+          const otherTeamPlayers = finalFormation[otherTeamKey]
+            .filter(p => p !== null)
+            .map(p => p.uid);
+          
+          otherTeamPlayers.forEach(opponentUid => {
+            score -= coOccurrences[playerUid][opponentUid].sameTeam * 0.3;
+          });
+          
+          if (score > maxScore) {
+            maxScore = score;
+            bestPlayer = playerUid;
+          }
+        });
+        
+        if (bestPlayer) {
+          finalFormation[teamKey][position] = {
+            uid: bestPlayer,
+            name: positionPreferences[bestPlayer].name
+          };
+          assignedPlayers.add(bestPlayer);
+        }
+      }
+    });
+    
+    return {
+      ...finalFormation,
+      proposalCount: proposals.length,
+      confidence: calculateConfidence(proposals, finalFormation)
+    };
+  };
+  
+  const calculateConfidence = (proposals, finalFormation) => {
+    // Calcola quanto questa formazione è "sicura" basandosi sul consenso
+    let totalMatches = 0;
+    let totalPossible = 0;
+    
+    proposals.forEach(proposal => {
+      const formation = proposal.formation;
+      
+      // Controlla matches team1
+      formation.team1.forEach((player, pos) => {
+        totalPossible++;
+        if (player && finalFormation.team1[pos] && 
+            player.uid === finalFormation.team1[pos].uid) {
+          totalMatches++;
+        }
+      });
+      
+      // Controlla matches team2
+      formation.team2.forEach((player, pos) => {
+        totalPossible++;
+        if (player && finalFormation.team2[pos] && 
+            player.uid === finalFormation.team2[pos].uid) {
+          totalMatches++;
+        }
+      });
+      
+      // Controlla riserva
+      totalPossible++;
+      if (formation.reserve && finalFormation.reserve && 
+          formation.reserve.uid === finalFormation.reserve.uid) {
+        totalMatches++;
+      }
+    });
+    
+    return totalPossible > 0 ? (totalMatches / totalPossible) * 100 : 0;
+  };
+
+  // Effetto per inizializzare le formazioni quando si entra nella view
+  React.useEffect(() => {
+    if (currentView === VIEW_STATES.FORMATION_PROPOSAL && selectedMatch) {
+      initializeFormationProposal();
+    }
+    if ((currentView === VIEW_STATES.FORMATION_RESULT || currentView === VIEW_STATES.FORMATION_PROPOSAL) && selectedMatch) {
+      loadFormationProposals(selectedMatch.id).then(proposals => {
+        if (proposals.length >= 3) {
+          setCalculatedFormations(calculateOptimalFormations(proposals));
+        }
+      });
+    }
+  }, [currentView, selectedMatch]);
 
   // Admin function to recalculate all user statistics from actual database data
   const handleRecalculateAllStats = async () => {
@@ -1190,6 +1581,8 @@ export default function VolleyballApp() {
             <h1 className="text-xl md:text-3xl font-bold text-gray-100 truncate">
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
                currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
+               currentView === VIEW_STATES.FORMATION_PROPOSAL ? 'Proponi Formazione' :
+               currentView === VIEW_STATES.FORMATION_RESULT ? 'Formazioni Proposte' :
                'Pallavolo - 7 fighters'}
             </h1>
             {/* Subtitle visible only for logged users */}
@@ -1211,6 +1604,10 @@ export default function VolleyballApp() {
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Partite già giocate</div>
             ) : currentView === VIEW_STATES.USERS_LIST ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Gestisci ruoli e utenti</div>
+            ) : currentView === VIEW_STATES.FORMATION_PROPOSAL ? (
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Crea la tua formazione ideale</div>
+            ) : currentView === VIEW_STATES.FORMATION_RESULT ? (
+              <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Visualizza le formazioni calcolate</div>
             ) : currentView === VIEW_STATES.MATCH_LIST && sessionDate ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Seleziona una partita per iscriverti</div>
             ) : (
@@ -1892,6 +2289,44 @@ export default function VolleyballApp() {
             </div>
           )}
         </div>
+        
+        {/* Pulsante Formazioni (solo per partite storiche e ex-partecipanti) */}
+        {isHistoricalMatch && selectedMatch && currentUser && 
+         selectedMatch.participants && 
+         selectedMatch.participants.some(p => p.uid === currentUser.uid) && (
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+            <h3 className="text-lg font-bold text-gray-100 mb-4">Proponi Formazione</h3>
+            <p className="text-gray-400 mb-4">
+              Questa partita è stata completata. Puoi proporre la tua formazione ideale per vedere come avresti organizzato le squadre.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setCurrentView(VIEW_STATES.FORMATION_PROPOSAL);
+                }}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Proponi Formazione
+              </button>
+              {formationProposals.length >= 3 && (
+                <button
+                  onClick={() => {
+                    setCurrentView(VIEW_STATES.FORMATION_RESULT);
+                  }}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Vedi Formazioni ({formationProposals.length})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -2211,6 +2646,323 @@ export default function VolleyballApp() {
     );
   };
 
+  // Render formation proposal view
+  const renderFormationProposalView = () => {
+    const positionNames = {
+      0: "P1 (Servizio)",
+      1: "P2 (Opposto)",
+      2: "P3 (Centrale)",
+      3: "P4 (Schiacciatore)",
+      4: "P5 (Centrale)",
+      5: "P6 (Libero)"
+    };
+
+    const renderPlayer = (player, onClick = null) => (
+      <div
+        key={player?.uid || 'empty'}
+        className={`h-16 w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-xs transition-all duration-200 ${
+          player 
+            ? 'bg-indigo-600 text-white border-solid border-indigo-500 cursor-pointer hover:bg-indigo-700' 
+            : 'bg-gray-700/30 text-gray-400'
+        }`}
+        draggable={!!player}
+        onDragStart={(e) => player && handleDragStart(e, player)}
+        onDragOver={handleDragOver}
+        onDrop={(e) => !player && handleDrop(e, 'available', null)}
+        onClick={() => player && onClick && onClick(player)}
+      >
+        {player ? (
+          <div className="p-1">
+            <div className="font-medium">{player.name}</div>
+            {player.isFriend && <div className="text-xs opacity-75">Amico</div>}
+          </div>
+        ) : (
+          <div className="text-gray-500">Vuoto</div>
+        )}
+      </div>
+    );
+
+    const renderTeam = (teamKey, teamName) => (
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Rete (rappresentata come linea) */}
+          <div className="col-span-3 h-1 bg-gray-400 mb-2"></div>
+          
+          {/* Prima fila */}
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 3)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[3]}</div>
+            {renderPlayer(currentFormation[teamKey][3], handleReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 2)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[2]}</div>
+            {renderPlayer(currentFormation[teamKey][2], handleReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 1)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[1]}</div>
+            {renderPlayer(currentFormation[teamKey][1], handleReturnToAvailable)}
+          </div>
+
+          {/* Seconda fila */}
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 4)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[4]}</div>
+            {renderPlayer(currentFormation[teamKey][4], handleReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 5)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[5]}</div>
+            {renderPlayer(currentFormation[teamKey][5], handleReturnToAvailable)}
+          </div>
+          <div 
+            className="flex flex-col items-center gap-2"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, teamKey, 0)}
+          >
+            <div className="text-xs text-gray-400">{positionNames[0]}</div>
+            {renderPlayer(currentFormation[teamKey][0], handleReturnToAvailable)}
+          </div>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h2 className="text-xl font-bold text-gray-100 mb-4">Proponi la tua formazione</h2>
+          <p className="text-gray-400 mb-4">
+            Trascina i giocatori dalle posizioni disponibili al campo per creare la tua formazione ideale.
+            Servono 6 giocatori per squadra (12 totali).
+          </p>
+          
+          {/* Giocatori disponibili */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">Giocatori disponibili</h3>
+            <div className="flex flex-wrap gap-3">
+              {availablePlayers
+                .filter(player => {
+                  // Mostra solo i giocatori non ancora posizionati
+                  const isInFormation = 
+                    currentFormation.team1.some(p => p?.uid === player.uid) ||
+                    currentFormation.team2.some(p => p?.uid === player.uid) ||
+                    currentFormation.reserve?.uid === player.uid;
+                  return !isInFormation;
+                })
+                .map(player => renderPlayer(player))
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* Campo di gioco */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {renderTeam('team1', 'Squadra A')}
+          {renderTeam('team2', 'Squadra B')}
+        </div>
+
+        {/* Riserva */}
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva</h3>
+          <div className="flex justify-center">
+            <div 
+              className="flex flex-col items-center gap-2"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, 'reserve', null)}
+            >
+              <div className="text-xs text-gray-400">Giocatore di riserva</div>
+              {renderPlayer(currentFormation.reserve, handleReturnToAvailable)}
+            </div>
+          </div>
+        </div>
+
+        {/* Pulsante submit */}
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+          >
+            Indietro
+          </button>
+          <button
+            onClick={submitFormationProposal}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+          >
+            Invia Formazione
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render formation result view (when >= 3 proposals exist)
+  const renderFormationResultView = () => {
+    if (!calculatedFormations) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 className="text-xl font-bold text-gray-100 mb-4">Formazioni Proposte</h2>
+            <p className="text-gray-400">
+              Servono almeno 3 proposte per calcolare le formazioni ottimali. 
+              Attualmente ci sono {formationProposals.length} proposte.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    const positionNames = {
+      0: "P1 (Servizio)",
+      1: "P2 (Opposto)", 
+      2: "P3 (Centrale)",
+      3: "P4 (Schiacciatore)",
+      4: "P5 (Centrale)",
+      5: "P6 (Libero)"
+    };
+
+    const renderCalculatedPlayer = (player) => (
+      <div
+        key={player?.uid || 'empty'}
+        className={`h-16 w-24 rounded-lg border-2 flex items-center justify-center text-center text-xs transition-all duration-200 ${
+          player 
+            ? 'bg-green-600 text-white border-solid border-green-500' 
+            : 'bg-gray-700/30 text-gray-400 border-dashed border-gray-400'
+        }`}
+      >
+        {player ? (
+          <div className="p-1">
+            <div className="font-medium">{player.name}</div>
+          </div>
+        ) : (
+          <div className="text-gray-500">Vuoto</div>
+        )}
+      </div>
+    );
+
+    const renderCalculatedTeam = (teamKey, teamName) => (
+      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+        <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Rete */}
+          <div className="col-span-3 h-1 bg-gray-400 mb-2"></div>
+          
+          {/* Prima fila */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[3]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][3])}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[2]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][2])}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[1]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][1])}
+          </div>
+
+          {/* Seconda fila */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[4]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][4])}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[5]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][5])}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-xs text-gray-400">{positionNames[0]}</div>
+            {renderCalculatedPlayer(calculatedFormations[teamKey][0])}
+          </div>
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="space-y-6">
+        {/* Informazioni sulla formazione */}
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h2 className="text-xl font-bold text-gray-100 mb-4">Formazioni Calcolate</h2>
+          <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-indigo-400">{calculatedFormations.proposalCount}</div>
+              <div className="text-sm text-gray-400">Proposte analizzate</div>
+            </div>
+            <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-green-400">{Math.round(calculatedFormations.confidence)}%</div>
+              <div className="text-sm text-gray-400">Consenso</div>
+            </div>
+            <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-purple-400">13</div>
+              <div className="text-sm text-gray-400">Posizioni totali</div>
+            </div>
+          </div>
+          <p className="text-gray-400">
+            Questa formazione è stata calcolata analizzando {calculatedFormations.proposalCount} proposte diverse, 
+            tenendo conto delle preferenze di posizione e delle combinazioni di giocatori più frequenti.
+          </p>
+          {calculatedFormations.confidence < 50 && (
+            <div className="mt-3 p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
+              <p className="text-amber-300 text-sm">
+                ⚠️ Il consenso è basso ({Math.round(calculatedFormations.confidence)}%). 
+                Le opinioni sono molto diverse tra i partecipanti.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Campo di gioco calcolato */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {renderCalculatedTeam('team1', 'Squadra A')}
+          {renderCalculatedTeam('team2', 'Squadra B')}
+        </div>
+
+        {/* Riserva calcolata */}
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva</h3>
+          <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-xs text-gray-400">Giocatore di riserva</div>
+              {renderCalculatedPlayer(calculatedFormations.reserve)}
+            </div>
+          </div>
+        </div>
+
+        {/* Pulsante per tornare alle proposte */}
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={() => setCurrentView(VIEW_STATES.FORMATION_PROPOSAL)}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+          >
+            Modifica la tua proposta
+          </button>
+          <button
+            onClick={() => setCurrentView(VIEW_STATES.MATCH_DETAIL)}
+            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+          >
+            Torna alla partita
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Render footer navigation (visible only for logged users)
   const renderFooter = () => {
     if (!isLoggedIn) return null;
@@ -2327,6 +3079,8 @@ export default function VolleyballApp() {
             {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
             {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
             {currentView === VIEW_STATES.USERS_LIST && renderUsersListView()}
+            {currentView === VIEW_STATES.FORMATION_PROPOSAL && renderFormationProposalView()}
+            {currentView === VIEW_STATES.FORMATION_RESULT && renderFormationResultView()}
           </div>
         )}
         
