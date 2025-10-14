@@ -2623,18 +2623,25 @@ export default function VolleyballApp() {
           
 
           
-          {/* Sezione Set */}
+          {/* Sezione dinamica: Riserve per partite aperte, Set per partite giocate */}
           <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-100">Set</h2>
-              <span className="bg-purple-900 text-purple-200 px-3 py-1 rounded-full font-semibold text-sm border border-purple-700">
-                {matchSets.length}
+              <h2 className="text-xl font-bold text-gray-100">
+                {isHistoricalMatch ? 'Set' : 'Riserve'}
+              </h2>
+              <span className={`px-3 py-1 rounded-full font-semibold text-sm border ${
+                isHistoricalMatch 
+                  ? 'bg-purple-900 text-purple-200 border-purple-700' 
+                  : 'bg-amber-900 text-amber-200 border-amber-700'
+              }`}>
+                {isHistoricalMatch ? matchSets.length : getReservesTotalCount()}
               </span>
             </div>
             <div className="space-y-3">
-              {matchSets.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Nessun set</p>
-              ) : (
+              {isHistoricalMatch ? (
+                matchSets.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">Nessun set</p>
+                ) : (
                 matchSets.map((set) => (
                   <div key={set.id} className="bg-purple-900 rounded-lg p-3 border border-purple-700">
                     <div className="flex items-center justify-between">
@@ -2721,24 +2728,100 @@ export default function VolleyballApp() {
                     </div>
                   </div>
                 ))
+                )
+              ) : (
+                !selectedMatch || !selectedMatch.reserves || selectedMatch.reserves.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
+                ) : (
+                  selectedMatch.reserves.map((reserve, index) => (
+                    <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={reserve.photoURL}
+                          alt={reserve.name}
+                          className="w-10 h-10 rounded-full border-2 border-amber-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-100">
+                              {index + 1}. {reserve.name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">{reserve.timestamp}</span>
+                              <button
+                                onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
+                                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                title="Visualizza statistiche"
+                              >
+                                📊
+                              </button>
+                              {isAdmin && (
+                                <>
+                                  <button
+                                    onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                    title="Rimuovi utente"
+                                  >
+                                    ✕
+                                  </button>
+                                  <button
+                                    onClick={() => promoteFromReserve(reserve.uid)}
+                                    className="text-green-400 hover:text-green-600 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                    title="Promuovi a partecipante"
+                                  >
+                                    ↑
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {reserve.friends?.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {reserve.friends.map((friend, fIndex) => (
+                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-amber-400">+</span>
+                                    <span>{friend}</span>
+                                    <span className="text-xs text-gray-500">(Amico di {reserve.name})</span>
+                                  </div>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
+                                      className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
+                                      title="Rimuovi amico"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )
               )}
             </div>
             
-            {/* Pulsante Aggiungi Set */}
-            <div className="mt-4 pt-4 border-t border-gray-700">
-              <button
-                type="button"
-                onClick={async () => await initializeSetCreation()}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
-              >
-                <span role="img" aria-label="set">🎯</span>
-                Aggiungi Set {matchSets.length + 1}
-              </button>
-            </div>
+            {/* Pulsante Aggiungi Set - solo per partite storiche */}
+            {isHistoricalMatch && (
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                <button
+                  type="button"
+                  onClick={async () => await initializeSetCreation()}
+                  className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <span role="img" aria-label="set">🎯</span>
+                  Aggiungi Set {matchSets.length + 1}
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
-        {/* Sezione Riserve - sotto il grid principale */}
+        {/* Sezione per partite storiche con formazioni e gestione set */}
         {!isHistoricalMatch && (
           <div className="mt-6">
             <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
