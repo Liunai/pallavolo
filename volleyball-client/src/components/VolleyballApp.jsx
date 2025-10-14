@@ -2667,6 +2667,10 @@ export default function VolleyballApp() {
                         {/* Squadre espanse */}
                         {expandedSetId === set.id && (
                           <div className="mt-3 pt-3 border-t border-purple-700">
+                            {/* Debug info */}
+                            <div className="text-xs text-gray-400 mb-2">
+                              Debug: team1 length: {set.team1?.length || 0}, team2 length: {set.team2?.length || 0}
+                            </div>
                             <div className="grid grid-cols-2 gap-4 text-xs">
                               <div>
                                 <div className="font-semibold text-purple-300 mb-2">Squadra A</div>
