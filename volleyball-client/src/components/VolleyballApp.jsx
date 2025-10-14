@@ -491,16 +491,94 @@ export default function VolleyballApp() {
       reserveTeam1: null,
       reserveTeam2: null
     });
+    
+    // Imposta le dimensioni dei campi in base alla larghezza dello schermo
+    adjustFormationLayout();
   };
+  
+  // Funzione per adattare il layout in base alle dimensioni dello schermo
+  const adjustFormationLayout = () => {
+    // Questa funzione verrà chiamata quando si inizializza la formazione
+    // e anche quando cambia la dimensione della finestra
+    const isMobile = window.innerWidth < 768;
+    
+    // Aggiunge o rimuove una classe a body per gestire i media queries custom
+    if (isMobile) {
+      document.body.classList.add('is-mobile-view');
+    } else {
+      document.body.classList.remove('is-mobile-view');
+    }
+    
+    // Aggiunge uno stile inline per adattare il layout del campo
+    const courtElements = document.querySelectorAll('.volleyball-court');
+    courtElements.forEach(court => {
+      if (isMobile) {
+        court.style.maxWidth = '100%';
+        court.style.height = 'auto';
+        court.style.aspectRatio = '3/4';
+      } else {
+        court.style.maxWidth = '450px';
+        court.style.height = '300px';
+        court.style.aspectRatio = 'auto';
+      }
+    });
+  };
+  
+  // Aggiungi un listener per ridimensionare i campi quando la finestra cambia dimensione
+  useEffect(() => {
+    window.addEventListener('resize', adjustFormationLayout);
+    return () => {
+      window.removeEventListener('resize', adjustFormationLayout);
+    };
+  }, []);
 
   const handleDragStart = (e, player) => {
     setDraggedPlayer(player);
     e.dataTransfer.effectAllowed = 'move';
+    
+    // Per rendere visibile il drag su mobile
+    if (e.dataTransfer.setDragImage) {
+      const dragIcon = document.createElement('div');
+      dragIcon.innerHTML = `<div style="padding: 10px; background-color: rgba(79, 70, 229, 0.8); color: white; border-radius: 8px; font-size: 14px;">${player.name}</div>`;
+      document.body.appendChild(dragIcon);
+      e.dataTransfer.setDragImage(dragIcon, 0, 0);
+      setTimeout(() => {
+        document.body.removeChild(dragIcon);
+      }, 0);
+    }
   };
 
   const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+  };
+  
+  // Aggiunge supporto per tocco su dispositivi mobili
+  const handleTouchStart = (player) => {
+    setDraggedPlayer(player);
+  };
+  
+  const handleTouchEnd = (e, team, position) => {
+    e.preventDefault();
+    if (!draggedPlayer) return;
+    
+    // Trova l'elemento HTML sotto il dito
+    const touch = e.changedTouches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // Cerca l'elemento più vicino con attributi data-team e data-position
+    let targetElement = element;
+    while (targetElement && (!targetElement.dataset?.team || !targetElement.dataset?.position)) {
+      targetElement = targetElement.parentElement;
+    }
+    
+    if (targetElement && targetElement.dataset.team && targetElement.dataset.position !== undefined) {
+      // Usa la funzione di drop esistente con i dati dell'elemento trovato
+      handleDrop({preventDefault: () => {}}, targetElement.dataset.team, parseInt(targetElement.dataset.position));
+    } else {
+      // Annulla il drag&drop se non è stato trovato un target valido
+      setDraggedPlayer(null);
+    }
   };
 
   const handleDrop = (e, team, position) => {
@@ -1472,6 +1550,7 @@ export default function VolleyballApp() {
       );
       const sessionsSnap = await getDocs(q);
       const sessions = await Promise.all(sessionsSnap.docs.map(async (docSnapshot) => {
+        const sessionId = docSnapshot.id;
         const sessionData = docSnapshot.data();
         
         // Carica i partecipanti dalla sottocollezione se non sono nel documento principale
@@ -1489,10 +1568,24 @@ export default function VolleyballApp() {
           }
         }
         
+        // Carica il numero di set per questa partita
+        let setCount = 0;
+        try {
+          const setsQuery = query(
+            collection(db, 'matchSets'),
+            where('matchId', '==', sessionId)
+          );
+          const setsSnapshot = await getDocs(setsQuery);
+          setCount = setsSnapshot.size;
+        } catch (error) {
+          console.error('Error loading sets count for session:', sessionId, error);
+        }
+        
         return {
-          id: docSnapshot.id,
+          id: sessionId,
           ...sessionData,
-          participants
+          participants,
+          setCount
         };
       }));
       setMatchHistory(sessions);
@@ -3068,10 +3161,10 @@ export default function VolleyballApp() {
                       <div className="text-xs text-gray-400">Partecipanti</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg md:text-2xl font-bold text-amber-400">
-                        {(session.reserves?.length || 0) + (session.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
+                      <div className="text-lg md:text-2xl font-bold text-purple-400">
+                        {session.setCount || 0}
                       </div>
-                      <div className="text-xs text-gray-400">Riserve</div>
+                      <div className="text-xs text-gray-400">Set</div>
                     </div>
                     {isAdmin && (
                       <div className="flex items-center gap-2">
@@ -3283,21 +3376,22 @@ export default function VolleyballApp() {
     const renderPlayer = (player, onClick = null) => (
       <div
         key={player?.uid || 'empty'}
-        className={`h-16 w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-xs transition-all duration-200 ${
+        className={`h-12 sm:h-16 w-20 sm:w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-[10px] sm:text-xs transition-all duration-200 ${
           player 
             ? 'bg-indigo-600 text-white border-solid border-indigo-500 cursor-pointer hover:bg-indigo-700' 
             : 'bg-gray-700/30 text-gray-400'
         }`}
         draggable={!!player}
         onDragStart={(e) => player && handleDragStart(e, player)}
+        onTouchStart={() => player && handleTouchStart(player)}
         onDragOver={handleDragOver}
         onDrop={(e) => !player && handleDrop(e, 'available', null)}
         onClick={() => player && onClick && onClick(player)}
       >
         {player ? (
           <div className="p-1">
-            <div className="font-medium">{player.name}</div>
-            {player.isFriend && <div className="text-xs opacity-75">Amico</div>}
+            <div className="font-medium truncate max-w-full">{player.name}</div>
+            {player.isFriend && <div className="text-[8px] sm:text-xs opacity-75">Amico</div>}
           </div>
         ) : (
           <div className="text-gray-500">Vuoto</div>
@@ -3306,61 +3400,79 @@ export default function VolleyballApp() {
     );
 
     const renderTeam = (teamKey, teamName) => (
-      <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-        <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
-        <div className="grid grid-cols-3 gap-3">
+      <div className="bg-gray-800 rounded-xl p-3 sm:p-6 border border-gray-700 volleyball-court">
+        <h3 className="text-base sm:text-lg font-bold text-gray-100 mb-2 sm:mb-4 text-center">{teamName}</h3>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {/* Rete (rappresentata come linea) */}
           <div className="col-span-3 h-1 bg-gray-400 mb-2"></div>
           
           {/* Prima fila */}
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 3)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 3)}
+            data-team={teamKey}
+            data-position={3}
           >
-            <div className="text-xs text-gray-400">{positionNames[3]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[3]}</div>
             {renderPlayer(currentFormation[teamKey][3], handleReturnToAvailable)}
           </div>
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 2)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 2)}
+            data-team={teamKey}
+            data-position={2}
           >
-            <div className="text-xs text-gray-400">{positionNames[2]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[2]}</div>
             {renderPlayer(currentFormation[teamKey][2], handleReturnToAvailable)}
           </div>
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 1)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 1)}
+            data-team={teamKey}
+            data-position={1}
           >
-            <div className="text-xs text-gray-400">{positionNames[1]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[1]}</div>
             {renderPlayer(currentFormation[teamKey][1], handleReturnToAvailable)}
           </div>
 
           {/* Seconda fila */}
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 4)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 4)}
+            data-team={teamKey}
+            data-position={4}
           >
-            <div className="text-xs text-gray-400">{positionNames[4]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[4]}</div>
             {renderPlayer(currentFormation[teamKey][4], handleReturnToAvailable)}
           </div>
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 5)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 5)}
+            data-team={teamKey}
+            data-position={5}
           >
-            <div className="text-xs text-gray-400">{positionNames[5]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[5]}</div>
             {renderPlayer(currentFormation[teamKey][5], handleReturnToAvailable)}
           </div>
           <div 
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-1 sm:gap-2"
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, teamKey, 0)}
+            onTouchEnd={(e) => handleTouchEnd(e, teamKey, 0)}
+            data-team={teamKey}
+            data-position={0}
           >
-            <div className="text-xs text-gray-400">{positionNames[0]}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[0]}</div>
             {renderPlayer(currentFormation[teamKey][0], handleReturnToAvailable)}
           </div>
         </div>
@@ -3378,17 +3490,28 @@ export default function VolleyballApp() {
           
           {/* Giocatori disponibili */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-100 mb-3">Giocatori disponibili</h3>
-            <div className="flex flex-wrap gap-3">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-100 mb-2 sm:mb-3">Giocatori disponibili</h3>
+            <input
+              type="text"
+              value={filterPlayer}
+              onChange={(e) => setFilterPlayer(e.target.value)}
+              placeholder="Filtra giocatori..."
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg mb-3 text-sm text-gray-100"
+            />
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {availablePlayers
                 .filter(player => {
-                  // Mostra solo i giocatori non ancora posizionati
+                  // Mostra solo i giocatori non ancora posizionati e che corrispondono al filtro
                   const isInFormation = 
                     currentFormation.team1.some(p => p?.uid === player.uid) ||
                     currentFormation.team2.some(p => p?.uid === player.uid) ||
                     currentFormation.reserveTeam1?.uid === player.uid ||
                     currentFormation.reserveTeam2?.uid === player.uid;
-                  return !isInFormation;
+                  
+                  const matchesFilter = !filterPlayer || 
+                    player.name.toLowerCase().includes(filterPlayer.toLowerCase());
+                    
+                  return !isInFormation && matchesFilter;
                 })
                 .map(player => renderPlayer(player))
               }

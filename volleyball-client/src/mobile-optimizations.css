@@ -1,0 +1,44 @@
+/* Ottimizzazioni per dispositivi mobili */
+
+/* Riduce le dimensioni dei pulsanti su schermi piccoli */
+@media (max-width: 640px) {
+  .button-responsive {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  .volleyball-court {
+    max-width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 3/4 !important;
+  }
+  
+  /* Rende i pulsanti più grandi per essere toccabili su mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Migliora il drag and drop su mobile */
+  [draggable="true"] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  
+  /* Previene lo zoom durante il tap su elementi interattivi */
+  input, button, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+}
+
+/* Miglioramenti per il drag and drop su mobile */
+.drag-active {
+  opacity: 0.7;
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.drop-target {
+  border: 2px dashed #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+}
