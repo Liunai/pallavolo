@@ -220,10 +220,30 @@ export default function VolleyballApp() {
           collection(db, 'activeMatches'),
           orderBy('date', 'asc')
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const matches = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+          const matches = await Promise.all(snapshot.docs.map(async (docSnapshot) => {
+            const matchData = docSnapshot.data();
+            
+            // Carica i partecipanti dalla sottocollezione se non sono nel documento principale
+            let participants = matchData.participants || [];
+            if (participants.length === 0) {
+              try {
+                const participantsQuery = query(collection(db, 'activeMatches', docSnapshot.id, 'participants'));
+                const participantsSnapshot = await getDocs(participantsQuery);
+                participants = participantsSnapshot.docs.map(doc => ({
+                  uid: doc.id,
+                  ...doc.data()
+                }));
+              } catch (error) {
+                console.error('Error loading participants for match:', docSnapshot.id, error);
+              }
+            }
+            
+            return {
+              id: docSnapshot.id,
+              ...matchData,
+              participants
+            };
           }));
           setActiveMatches(matches);
           
@@ -643,11 +663,32 @@ export default function VolleyballApp() {
   };
 
   // Set Management Functions
-  const initializeSetCreation = () => {
-    if (!selectedMatch || !selectedMatch.participants) return;
+  const initializeSetCreation = async () => {
+    if (!selectedMatch) return;
+    
+    // Se non abbiamo i partecipanti, li carichiamo dal database
+    let participants = selectedMatch.participants || [];
+    
+    if (!participants || participants.length === 0) {
+      try {
+        const matchDoc = await getDoc(doc(db, 'activeMatches', selectedMatch.id));
+        if (matchDoc.exists()) {
+          const matchData = matchDoc.data();
+          participants = matchData.participants || [];
+        }
+      } catch (error) {
+        console.error('Error loading match participants:', error);
+        return;
+      }
+    }
+    
+    if (participants.length === 0) {
+      console.error('No participants found for this match');
+      return;
+    }
     
     // Metti tutti i partecipanti nella lista disponibili (stesso codice delle formazioni)
-    const players = selectedMatch.participants.map(p => ({
+    const players = participants.map(p => ({
       uid: p.uid,
       name: p.name, // Solo il nome scelto per il sito
       friends: p.friends || []
@@ -1406,7 +1447,30 @@ export default function VolleyballApp() {
         orderBy('date', 'desc')
       );
       const sessionsSnap = await getDocs(q);
-      const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const sessions = await Promise.all(sessionsSnap.docs.map(async (docSnapshot) => {
+        const sessionData = docSnapshot.data();
+        
+        // Carica i partecipanti dalla sottocollezione se non sono nel documento principale
+        let participants = sessionData.participants || [];
+        if (participants.length === 0) {
+          try {
+            const participantsQuery = query(collection(db, 'sessions', docSnapshot.id, 'participants'));
+            const participantsSnapshot = await getDocs(participantsQuery);
+            participants = participantsSnapshot.docs.map(doc => ({
+              uid: doc.id,
+              ...doc.data()
+            }));
+          } catch (error) {
+            console.error('Error loading participants for session:', docSnapshot.id, error);
+          }
+        }
+        
+        return {
+          id: docSnapshot.id,
+          ...sessionData,
+          participants
+        };
+      }));
       setMatchHistory(sessions);
     } catch (error) {
       console.error('Error loading match history:', error);
@@ -2627,7 +2691,7 @@ export default function VolleyballApp() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => initializeSetCreation()}
+                  onClick={async () => await initializeSetCreation()}
                   className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
                 >
                   <span role="img" aria-label="set">🎯</span>
