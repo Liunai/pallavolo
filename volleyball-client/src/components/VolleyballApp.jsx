@@ -2667,16 +2667,12 @@ export default function VolleyballApp() {
                         {/* Squadre espanse */}
                         {expandedSetId === set.id && (
                           <div className="mt-3 pt-3 border-t border-purple-700">
-                            {/* Debug info */}
-                            <div className="text-xs text-gray-400 mb-2">
-                              Debug: team1 length: {set.team1?.length || 0}, team2 length: {set.team2?.length || 0}
-                            </div>
                             <div className="grid grid-cols-2 gap-4 text-xs">
                               <div>
                                 <div className="font-semibold text-purple-300 mb-2">Squadra A</div>
                                 <div className="space-y-1">
-                                  {set.team1 && set.team1.length > 0 ? (
-                                    set.team1.map((player, idx) => 
+                                  {set.teamA && set.teamA.length > 0 ? (
+                                    set.teamA.map((player, idx) => 
                                       player ? (
                                         <div key={idx} className="flex items-center gap-2">
                                           <span className="text-purple-400 w-4">{idx + 1}.</span>
@@ -2687,10 +2683,10 @@ export default function VolleyballApp() {
                                   ) : (
                                     <div className="text-gray-500 italic">Nessun giocatore</div>
                                   )}
-                                  {set.reserveTeam1 && (
+                                  {set.reserveTeamA && (
                                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-purple-800">
                                       <span className="text-purple-400 w-4">R.</span>
-                                      <span className="text-purple-300">{set.reserveTeam1.name}</span>
+                                      <span className="text-purple-300">{set.reserveTeamA.name}</span>
                                     </div>
                                   )}
                                 </div>
@@ -2698,8 +2694,8 @@ export default function VolleyballApp() {
                               <div>
                                 <div className="font-semibold text-purple-300 mb-2">Squadra B</div>
                                 <div className="space-y-1">
-                                  {set.team2 && set.team2.length > 0 ? (
-                                    set.team2.map((player, idx) => 
+                                  {set.teamB && set.teamB.length > 0 ? (
+                                    set.teamB.map((player, idx) => 
                                       player ? (
                                         <div key={idx} className="flex items-center gap-2">
                                           <span className="text-purple-400 w-4">{idx + 1}.</span>
@@ -2710,10 +2706,10 @@ export default function VolleyballApp() {
                                   ) : (
                                     <div className="text-gray-500 italic">Nessun giocatore</div>
                                   )}
-                                  {set.reserveTeam2 && (
+                                  {set.reserveTeamB && (
                                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-purple-800">
                                       <span className="text-purple-400 w-4">R.</span>
-                                      <span className="text-purple-300">{set.reserveTeam2.name}</span>
+                                      <span className="text-purple-300">{set.reserveTeamB.name}</span>
                                     </div>
                                   )}
                                 </div>
