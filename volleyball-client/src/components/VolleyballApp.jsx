@@ -2230,6 +2230,32 @@ export default function VolleyballApp() {
                   </div>
                 </div>
                 
+                {/* Statistiche Set */}
+                <div className="grid grid-cols-2 gap-2 md:gap-3 mt-3">
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-green-400">{userStats.setsPlayed || 0}</div>
+                    <div className="text-xs text-gray-400">Set giocati</div>
+                  </div>
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-green-400">{userStats.setsWon || 0}</div>
+                    <div className="text-xs text-gray-400">Set vinti</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 md:gap-3 mt-2">
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className="text-lg md:text-xl font-bold text-yellow-400">
+                      {userStats.setsPlayed > 0 ? Math.round((userStats.setsWon / userStats.setsPlayed) * 100) : 0}%
+                    </div>
+                    <div className="text-xs text-gray-400">% Vittorie</div>
+                  </div>
+                  <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
+                    <div className={`text-lg md:text-xl font-bold ${(userStats.pointDifference || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {(userStats.pointDifference || 0) >= 0 ? '+' : ''}{userStats.pointDifference || 0}
+                    </div>
+                    <div className="text-xs text-gray-400">Diff. punti</div>
+                  </div>
+                </div>
+                
                 {/* Theme toggle button */}
                 <div className="mt-4 p-3 bg-gray-700/30 rounded-lg border border-gray-600/50">
                   <div className="flex items-center justify-between">
@@ -4212,6 +4238,32 @@ export default function VolleyballApp() {
                 <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
                   <div className="text-xl font-bold text-purple-400">{selectedUserStats.friendsBrought || 0}</div>
                   <div className="text-xs text-gray-400">Amici portati</div>
+                </div>
+              </div>
+              
+              {/* Statistiche Set */}
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-green-400">{selectedUserStats.setsPlayed || 0}</div>
+                  <div className="text-xs text-gray-400">Set giocati</div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-green-400">{selectedUserStats.setsWon || 0}</div>
+                  <div className="text-xs text-gray-400">Set vinti</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className="text-xl font-bold text-yellow-400">
+                    {selectedUserStats.setsPlayed > 0 ? Math.round((selectedUserStats.setsWon / selectedUserStats.setsPlayed) * 100) : 0}%
+                  </div>
+                  <div className="text-xs text-gray-400">% Vittorie</div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
+                  <div className={`text-xl font-bold ${(selectedUserStats.pointDifference || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {(selectedUserStats.pointDifference || 0) >= 0 ? '+' : ''}{selectedUserStats.pointDifference || 0}
+                  </div>
+                  <div className="text-xs text-gray-400">Diff. punti</div>
                 </div>
               </div>
               
