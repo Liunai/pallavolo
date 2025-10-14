@@ -98,6 +98,7 @@ export default function VolleyballApp() {
   const [filterPlayer, setFilterPlayer] = useState('');
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [expandedSetId, setExpandedSetId] = useState(null);
+  const [userFilter, setUserFilter] = useState(''); // Filtro per ricerca utente nello storico partite
 
   const currentSessionRef = useMemo(() => doc(db, 'state', 'currentSession'), []);
   
@@ -3088,13 +3089,83 @@ export default function VolleyballApp() {
       <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
         <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Storico Partite</h2>
         
+        {/* Filtro ricerca utente */}
+        <div className="mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                placeholder="Filtra per nome utente..."
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-400 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            {userFilter && (
+              <button
+                onClick={() => setUserFilter('')}
+                className="px-3 py-2 bg-gray-600 text-gray-300 rounded-lg hover:bg-gray-500 transition text-sm"
+                title="Pulisci filtro"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {userFilter && (
+            <p className="text-sm text-gray-400 mt-2">
+              Mostrando partite con utenti che contengono "{userFilter}"
+            </p>
+          )}
+        </div>
+        
         {matchHistory.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-400">Nessuna partita nel database</p>
           </div>
         ) : (
-          <div className="space-y-3 md:space-y-4">
-            {matchHistory.map((session, index) => (
+          (() => {
+            const filteredMatches = matchHistory.filter(session => {
+              if (!userFilter) return true;
+              
+              // Cerca nel nome degli utenti partecipanti
+              const participantsMatch = session.participants?.some(participant =>
+                participant.name?.toLowerCase().includes(userFilter.toLowerCase())
+              ) || false;
+              
+              // Cerca nel nome delle riserve
+              const reservesMatch = session.reserves?.some(reserve =>
+                reserve.name?.toLowerCase().includes(userFilter.toLowerCase())
+              ) || false;
+              
+              // Cerca negli amici dei partecipanti
+              const friendsMatch = session.participants?.some(participant =>
+                participant.friends?.some(friend =>
+                  friend.toLowerCase().includes(userFilter.toLowerCase())
+                )
+              ) || false;
+              
+              // Cerca negli amici delle riserve
+              const reserveFriendsMatch = session.reserves?.some(reserve =>
+                reserve.friends?.some(friend =>
+                  friend.toLowerCase().includes(userFilter.toLowerCase())
+                )
+              ) || false;
+              
+              return participantsMatch || reservesMatch || friendsMatch || reserveFriendsMatch;
+            });
+
+            return filteredMatches.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-400">
+                  {userFilter 
+                    ? `Nessuna partita trovata per "${userFilter}"`
+                    : "Nessuna partita nel database"
+                  }
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 md:space-y-4">
+                {filteredMatches.map((session, index) => (
               <div 
                 key={session.id}
                 className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600 hover:border-indigo-500 transition group"
@@ -3191,7 +3262,9 @@ export default function VolleyballApp() {
                 </div>
               </div>
             ))}
-          </div>
+              </div>
+            );
+          })()
         )}
       </div>
     </div>
