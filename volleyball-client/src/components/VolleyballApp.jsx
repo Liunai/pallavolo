@@ -443,7 +443,7 @@ export default function VolleyballApp() {
     // Metti tutti i partecipanti nella lista disponibili
     const players = selectedMatch.participants.map(p => ({
       uid: p.uid,
-      name: p.customDisplayName || p.displayName || p.name || p.email || p.uid || 'Utente',
+      name: p.name, // Solo il nome scelto per il sito
       friends: p.friends || []
     }));
     
@@ -649,7 +649,7 @@ export default function VolleyballApp() {
     // Metti tutti i partecipanti nella lista disponibili (stesso codice delle formazioni)
     const players = selectedMatch.participants.map(p => ({
       uid: p.uid,
-      name: p.customDisplayName || p.displayName || p.name || p.email || p.uid || 'Utente',
+      name: p.name, // Solo il nome scelto per il sito
       friends: p.friends || []
     }));
     
@@ -3025,7 +3025,7 @@ export default function VolleyballApp() {
       >
         {player ? (
           <div className="p-1">
-            <div className="font-medium">{player.name || player.displayName || player.uid || 'Utente'}</div>
+            <div className="font-medium">{player.name}</div>
             {player.isFriend && <div className="text-xs opacity-75">Amico</div>}
           </div>
         ) : (
@@ -3357,7 +3357,7 @@ export default function VolleyballApp() {
       >
         {player ? (
           <div className="p-1">
-            <div className="font-medium">{player.name || player.displayName || player.uid || 'Utente'}</div>
+            <div className="font-medium">{player.name}</div>
             {player.isFriend && <div className="text-xs opacity-75">Amico</div>}
           </div>
         ) : (
