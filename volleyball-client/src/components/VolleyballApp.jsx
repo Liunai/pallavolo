@@ -3630,10 +3630,10 @@ export default function VolleyballApp() {
               <label className="block text-sm text-gray-300 mb-2">Numero Set</label>
               <input
                 type="number"
-                min="1"
                 value={currentSet.setNumber || ''}
-                onChange={(e) => setCurrentSet(prev => ({ ...prev, setNumber: parseInt(e.target.value) }))}
-                className="w-full px-3 py-2 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                readOnly
+                className="w-full px-3 py-2 bg-gray-600 text-gray-300 border border-gray-500 rounded-lg cursor-not-allowed"
+                title="Il numero del set viene assegnato automaticamente"
               />
             </div>
             <div>
