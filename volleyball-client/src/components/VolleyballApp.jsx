@@ -1780,6 +1780,7 @@ export default function VolleyballApp() {
         const newEntry = {
           uid: currentUser.uid,
           name: customDisplayName || currentUser.displayName,
+          photoURL: currentUser.photoURL,
           friends,
           timestamp: new Date().toLocaleString('it-IT'),
         };
