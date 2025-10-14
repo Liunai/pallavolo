@@ -2227,7 +2227,6 @@ export default function VolleyballApp() {
               }`}>
                 <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
                   <Award className="w-5 h-5 text-yellow-500" />
-                  Le tue statistiche
                 </h3>
                 
                 {/* Nome utente personalizzabile */}
