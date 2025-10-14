@@ -2536,8 +2536,8 @@ export default function VolleyballApp() {
           </>
         )}
         
-        {/* Liste partecipanti/riserve/set - sempre visibili */}
-        <div className="grid md:grid-cols-3 gap-6 mt-8">
+        {/* Liste partecipanti/set - sempre visibili */}
+        <div className="grid md:grid-cols-2 gap-6 mt-8">
           <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
@@ -2621,8 +2621,126 @@ export default function VolleyballApp() {
             </div>
           </div>
           
-          {/* Sezione Riserve - nascosta per partite storiche */}
-          {!isHistoricalMatch && (
+
+          
+          {/* Sezione Set */}
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-100">Set</h2>
+              <span className="bg-purple-900 text-purple-200 px-3 py-1 rounded-full font-semibold text-sm border border-purple-700">
+                {matchSets.length}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {matchSets.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Nessun set</p>
+              ) : (
+                matchSets.map((set) => (
+                  <div key={set.id} className="bg-purple-900 rounded-lg p-3 border border-purple-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-100">Set {set.setNumber}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setExpandedSetId(expandedSetId === set.id ? null : set.id)}
+                              className="text-purple-400 hover:text-purple-300 text-xs px-2 py-1 rounded bg-purple-800/50 hover:bg-purple-800 transition"
+                              title={expandedSetId === set.id ? "Nascondi squadre" : "Mostra squadre"}
+                            >
+                              {expandedSetId === set.id ? '▼' : '▶'}
+                            </button>
+                            {(isAdmin || isSuperAdmin) && (
+                              <button
+                                onClick={() => deleteSet(set.id)}
+                                className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                title="Cancella set"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-300">
+                          <span className="font-semibold">Squadra A: {set.teamAScore}</span> - <span className="font-semibold">Squadra B: {set.teamBScore}</span>
+                        </div>
+                        
+                        {/* Squadre espanse */}
+                        {expandedSetId === set.id && (
+                          <div className="mt-3 pt-3 border-t border-purple-700">
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                              <div>
+                                <div className="font-semibold text-purple-300 mb-2">Squadra A</div>
+                                <div className="space-y-1">
+                                  {set.team1 && set.team1.length > 0 ? (
+                                    set.team1.map((player, idx) => 
+                                      player ? (
+                                        <div key={idx} className="flex items-center gap-2">
+                                          <span className="text-purple-400 w-4">{idx + 1}.</span>
+                                          <span className="text-gray-300">{player.name}</span>
+                                        </div>
+                                      ) : null
+                                    )
+                                  ) : (
+                                    <div className="text-gray-500 italic">Nessun giocatore</div>
+                                  )}
+                                  {set.reserveTeam1 && (
+                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-purple-800">
+                                      <span className="text-purple-400 w-4">R.</span>
+                                      <span className="text-purple-300">{set.reserveTeam1.name}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-purple-300 mb-2">Squadra B</div>
+                                <div className="space-y-1">
+                                  {set.team2 && set.team2.length > 0 ? (
+                                    set.team2.map((player, idx) => 
+                                      player ? (
+                                        <div key={idx} className="flex items-center gap-2">
+                                          <span className="text-purple-400 w-4">{idx + 1}.</span>
+                                          <span className="text-gray-300">{player.name}</span>
+                                        </div>
+                                      ) : null
+                                    )
+                                  ) : (
+                                    <div className="text-gray-500 italic">Nessun giocatore</div>
+                                  )}
+                                  {set.reserveTeam2 && (
+                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-purple-800">
+                                      <span className="text-purple-400 w-4">R.</span>
+                                      <span className="text-purple-300">{set.reserveTeam2.name}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Pulsante Aggiungi Set */}
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <button
+                type="button"
+                onClick={async () => await initializeSetCreation()}
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
+              >
+                <span role="img" aria-label="set">🎯</span>
+                Aggiungi Set {matchSets.length + 1}
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Sezione Riserve - sotto il grid principale */}
+        {!isHistoricalMatch && (
+          <div className="mt-6">
             <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-100">Riserve</h2>
@@ -2705,110 +2823,8 @@ export default function VolleyballApp() {
                 )}
               </div>
             </div>
-          )}
-          
-          {/* Sezione Set */}
-          <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-100">Set</h2>
-              <span className="bg-purple-900 text-purple-200 px-3 py-1 rounded-full font-semibold text-sm border border-purple-700">
-                {matchSets.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {matchSets.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Nessun set</p>
-              ) : (
-                matchSets.map((set) => (
-                  <div key={set.id} className="bg-purple-900 rounded-lg p-3 border border-purple-700">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-gray-100">Set {set.setNumber}</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedSetId(expandedSetId === set.id ? null : set.id)}
-                              className="text-purple-400 hover:text-purple-300 text-xs px-2 py-1 rounded bg-purple-800/50 hover:bg-purple-800 transition"
-                              title={expandedSetId === set.id ? "Nascondi squadre" : "Mostra squadre"}
-                            >
-                              {expandedSetId === set.id ? '▼' : '▶'}
-                            </button>
-                            {(isAdmin || isSuperAdmin) && (
-                              <button
-                                onClick={() => deleteSet(set.id)}
-                                className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                title="Cancella set"
-                              >
-                                🗑️
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-300">
-                          <span className="font-semibold">Squadra A: {set.teamAScore}</span> - <span className="font-semibold">Squadra B: {set.teamBScore}</span>
-                        </div>
-                        
-                        {/* Squadre espanse */}
-                        {expandedSetId === set.id && (
-                          <div className="mt-3 pt-3 border-t border-purple-700">
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                              <div>
-                                <div className="font-semibold text-purple-300 mb-1">Squadra A</div>
-                                <div className="space-y-1">
-                                  {set.team1?.map((player, idx) => player && (
-                                    <div key={idx} className="flex items-center gap-1">
-                                      <span className="text-purple-400">{idx + 1}.</span>
-                                      <span className="text-gray-300">{player.name}</span>
-                                    </div>
-                                  ))}
-                                  {set.reserveTeam1 && (
-                                    <div className="flex items-center gap-1 text-purple-400">
-                                      <span>R.</span>
-                                      <span>{set.reserveTeam1.name}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="font-semibold text-purple-300 mb-1">Squadra B</div>
-                                <div className="space-y-1">
-                                  {set.team2?.map((player, idx) => player && (
-                                    <div key={idx} className="flex items-center gap-1">
-                                      <span className="text-purple-400">{idx + 1}.</span>
-                                      <span className="text-gray-300">{player.name}</span>
-                                    </div>
-                                  ))}
-                                  {set.reserveTeam2 && (
-                                    <div className="flex items-center gap-1 text-purple-400">
-                                      <span>R.</span>
-                                      <span>{set.reserveTeam2.name}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            {/* Pulsante Aggiungi Set */}
-            <div className="mt-4 pt-4 border-t border-gray-700">
-              <button
-                type="button"
-                onClick={async () => await initializeSetCreation()}
-                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
-              >
-                <span role="img" aria-label="set">🎯</span>
-                Aggiungi Set {matchSets.length + 1}
-              </button>
-            </div>
           </div>
-        </div>
+        )}
         
         {/* Sezione per partite storiche con formazioni e gestione set */}
         {isHistoricalMatch && selectedMatch && currentUser && (
