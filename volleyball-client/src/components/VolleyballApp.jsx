@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Users, UserPlus, Clock, Calendar, Award, ChevronLeft, Home, History, UserCheck, Settings, Plus, Sun, Moon } from 'lucide-react';
+import { Users, UserPlus, Clock, Calendar, ChevronLeft, Home, History, UserCheck, Settings, Plus, Sun, Moon } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import {
@@ -2226,7 +2226,7 @@ export default function VolleyballApp() {
                 isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
               }`}>
                 <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                  <Award className="w-5 h-5 text-yellow-500" />
+
                 </h3>
                 
                 {/* Nome utente personalizzabile */}
@@ -4347,7 +4347,7 @@ export default function VolleyballApp() {
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 w-full max-w-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-yellow-500" />
+
                   Statistiche di {selectedUserStats.displayName}
                 </h3>
                 <button
