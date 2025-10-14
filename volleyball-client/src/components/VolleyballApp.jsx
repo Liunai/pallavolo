@@ -532,13 +532,8 @@ export default function VolleyballApp() {
     setCurrentFormation(newFormation);
   };
 
-  // Funzioni per i set - identiche alle formazioni
-  const handleSetDragStart = (e, player) => {
-    setDraggedPlayer(player);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleSetDrop = (e, team, position) => {
+  // Funzioni per i set - IDENTICHE alle formazioni ma operano su currentSet
+  const handleDropForSet = (e, team, position) => {
     e.preventDefault();
     if (!draggedPlayer) return;
 
@@ -569,7 +564,7 @@ export default function VolleyballApp() {
     setDraggedPlayer(null);
   };
 
-  const handleSetReturnToAvailable = (player) => {
+  const handleReturnToAvailableForSet = (player) => {
     // Rimuovi il giocatore dal set e rimettilo tra i disponibili
     const newSet = { ...currentSet };
     
@@ -3347,8 +3342,8 @@ export default function VolleyballApp() {
       5: "P6 (Libero)"
     };
 
-    // Render player for sets - identico al sistema delle formazioni
-    const renderPlayerForSet = (player, onClick = null) => (
+    // Render player for sets - IDENTICO alle formazioni
+    const renderPlayer = (player, onClick = null) => (
       <div
         key={player?.uid || 'empty'}
         className={`h-16 w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-xs transition-all duration-200 ${
@@ -3357,9 +3352,7 @@ export default function VolleyballApp() {
             : 'bg-gray-700/30 text-gray-400'
         }`}
         draggable={!!player}
-        onDragStart={(e) => player && handleSetDragStart(e, player)}
-        onDragOver={handleDragOver}
-        onDrop={(e) => !player && handleSetDrop(e, 'available', null)}
+        onDragStart={(e) => player && handleDragStart(e, player)}
         onClick={() => player && onClick && onClick(player)}
       >
         {player ? (
@@ -3373,8 +3366,8 @@ export default function VolleyballApp() {
       </div>
     );
 
-    // Render formazione squadra per set - identico alle formazioni
-    const renderSetTeamFormation = (teamKey, teamName) => (
+    // Render formazione squadra per set - IDENTICO alle formazioni
+    const renderTeamFormation = (teamKey, teamName) => (
       <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
         <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">{teamName}</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -3385,52 +3378,52 @@ export default function VolleyballApp() {
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 3)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 3)}
           >
             <div className="text-xs text-gray-400">{positionNames[3]}</div>
-            {renderPlayerForSet(currentSet[teamKey][3], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][3], handleReturnToAvailableForSet)}
           </div>
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 2)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 2)}
           >
             <div className="text-xs text-gray-400">{positionNames[2]}</div>
-            {renderPlayerForSet(currentSet[teamKey][2], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][2], handleReturnToAvailableForSet)}
           </div>
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 1)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 1)}
           >
             <div className="text-xs text-gray-400">{positionNames[1]}</div>
-            {renderPlayerForSet(currentSet[teamKey][1], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][1], handleReturnToAvailableForSet)}
           </div>
           
           {/* Seconda fila */}
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 4)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 4)}
           >
             <div className="text-xs text-gray-400">{positionNames[4]}</div>
-            {renderPlayerForSet(currentSet[teamKey][4], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][4], handleReturnToAvailableForSet)}
           </div>
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 5)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 5)}
           >
             <div className="text-xs text-gray-400">{positionNames[5]}</div>
-            {renderPlayerForSet(currentSet[teamKey][5], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][5], handleReturnToAvailableForSet)}
           </div>
           <div 
             className="flex flex-col items-center gap-2"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleSetDrop(e, teamKey, 0)}
+            onDrop={(e) => handleDropForSet(e, teamKey, 0)}
           >
             <div className="text-xs text-gray-400">{positionNames[0]}</div>
-            {renderPlayerForSet(currentSet[teamKey][0], handleSetReturnToAvailable)}
+            {renderPlayer(currentSet[teamKey][0], handleReturnToAvailableForSet)}
           </div>
         </div>
       </div>
@@ -3480,88 +3473,53 @@ export default function VolleyballApp() {
           {/* Formazioni con riserve integrate */}
           <div className="grid md:grid-cols-2 gap-6 mb-6">
             <div className="space-y-4">
-              {renderSetTeamFormation('team1', 'Squadra A')}
+              {renderTeamFormation('team1', 'Squadra A')}
               {/* Riserva Squadra A */}
               <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                 <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra A</h4>
                 <div 
                   className="flex justify-center"
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleSetDrop(e, 'reserveTeam1', 0)}
+                  onDrop={(e) => handleDropForSet(e, 'reserveTeam1', 0)}
                 >
-                  {renderPlayerForSet(currentSet.reserveTeam1, handleSetReturnToAvailable)}
+                  {renderPlayer(currentSet.reserveTeam1, handleReturnToAvailableForSet)}
                 </div>
               </div>
             </div>
             <div className="space-y-4">
-              {renderSetTeamFormation('team2', 'Squadra B')}
+              {renderTeamFormation('team2', 'Squadra B')}
               {/* Riserva Squadra B */}
               <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                 <h4 className="text-md font-bold text-gray-100 mb-3 text-center">Riserva Squadra B</h4>
                 <div 
                   className="flex justify-center"
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleSetDrop(e, 'reserveTeam2', 0)}
+                  onDrop={(e) => handleDropForSet(e, 'reserveTeam2', 0)}
                 >
-                  {renderPlayerForSet(currentSet.reserveTeam2, handleSetReturnToAvailable)}
+                  {renderPlayer(currentSet.reserveTeam2, handleReturnToAvailableForSet)}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Lista giocatori disponibili per drag & drop */}
-          {selectedMatch && (
-            <div className="bg-gray-700 rounded-lg p-4 mb-6">
-              <h4 className="text-md font-semibold text-gray-100 mb-3">Giocatori Disponibili (Trascina e Rilascia)</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {selectedMatch.participants?.filter(participant => {
-                  // Escludi i giocatori già posizionati nel set
+          {/* Giocatori disponibili - IDENTICO alle formazioni */}
+          <div className="bg-gray-700 rounded-lg p-4 mb-6">
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">Giocatori disponibili</h3>
+            <div className="flex flex-wrap gap-3">
+              {availablePlayers
+                .filter(player => {
+                  // Mostra solo i giocatori non ancora posizionati nel set
                   const isInSet = 
-                    currentSet.team1.some(p => p?.uid === participant.uid) ||
-                    currentSet.team2.some(p => p?.uid === participant.uid) ||
-                    currentSet.reserveTeam1?.uid === participant.uid ||
-                    currentSet.reserveTeam2?.uid === participant.uid;
+                    currentSet.team1.some(p => p?.uid === player.uid) ||
+                    currentSet.team2.some(p => p?.uid === player.uid) ||
+                    currentSet.reserveTeam1?.uid === player.uid ||
+                    currentSet.reserveTeam2?.uid === player.uid;
                   return !isInSet;
-                }).map(participant => (
-                  <div
-                    key={participant.uid}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/plain', JSON.stringify({ ...participant, uid: participant.uid }));
-                    }}
-                    className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-indigo-600 transition cursor-move border border-gray-500"
-                  >
-                    {participant.name}
-                  </div>
-                )) || []}
-                {/* Aggiungi anche gli amici */}
-                {selectedMatch.participants?.map(participant => 
-                  participant.friends?.filter((friend, idx) => {
-                    // Escludi gli amici già posizionati nel set
-                    const friendUid = `friend_${participant.uid}_${idx}`;
-                    const isInSet = 
-                      currentSet.team1.some(p => p?.uid === friendUid) ||
-                      currentSet.team2.some(p => p?.uid === friendUid) ||
-                      currentSet.reserveTeam1?.uid === friendUid ||
-                      currentSet.reserveTeam2?.uid === friendUid;
-                    return !isInSet;
-                  }).map((friend, idx) => (
-                    <div
-                      key={`${participant.uid}_friend_${idx}`}
-                      draggable
-                      onDragStart={(e) => {
-                        const friendPlayer = { name: friend, uid: `friend_${participant.uid}_${idx}` };
-                        e.dataTransfer.setData('text/plain', JSON.stringify(friendPlayer));
-                      }}
-                      className="p-2 bg-gray-600 text-gray-100 rounded text-sm hover:bg-green-600 transition cursor-move border border-green-500"
-                    >
-                      {friend} (Amico)
-                    </div>
-                  )) || []
-                ) || []}
-              </div>
+                })
+                .map(player => renderPlayer(player))
+              }
             </div>
-          )}
+          </div>
 
           {/* Pulsanti di azione */}
           <div className="flex gap-3">
