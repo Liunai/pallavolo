@@ -2860,11 +2860,22 @@ export default function VolleyballApp() {
                   selectedMatch.reserves.map((reserve, index) => (
                     <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={reserve.photoURL}
-                          alt={reserve.name}
-                          className="w-10 h-10 rounded-full border-2 border-amber-500"
-                        />
+                        {reserve.photoURL ? (
+                          <img
+                            src={reserve.photoURL}
+                            alt={reserve.name}
+                            className="w-10 h-10 rounded-full border-2 border-amber-500"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className={`w-10 h-10 rounded-full border-2 border-amber-500 bg-amber-700 flex items-center justify-center text-white font-bold ${reserve.photoURL ? 'hidden' : 'flex'}`}
+                        >
+                          👤
+                        </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-gray-100">
