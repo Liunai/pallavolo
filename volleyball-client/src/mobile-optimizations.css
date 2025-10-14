@@ -1,5 +1,10 @@
 /* Ottimizzazioni per dispositivi mobili */
 
+/* Migliori eventi touch per il drag and drop */
+.volleyball-court [data-team] {
+  touch-action: none; /* Previene lo zoom/scroll durante le operazioni di touch */
+}
+
 /* Riduce le dimensioni dei pulsanti su schermi piccoli */
 @media (max-width: 640px) {
   .button-responsive {
@@ -24,6 +29,11 @@
     -webkit-tap-highlight-color: transparent;
     user-select: none;
   }
+
+  /* Assicura che l'area toccabile sia abbastanza grande */
+  .volleyball-court [data-team] {
+    min-height: 70px;
+  }
   
   /* Previene lo zoom durante il tap su elementi interattivi */
   input, button, select, textarea, [role="button"] {
@@ -41,4 +51,36 @@
 .drop-target {
   border: 2px dashed #4f46e5 !important;
   background-color: rgba(79, 70, 229, 0.1) !important;
+}
+
+/* Feedback visivo per il touch */
+[draggable="true"]:active {
+  opacity: 0.7 !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Target più visibile durante il trascinamento */
+[data-team][data-position] {
+  transition: all 0.2s ease;
+}
+
+[data-team][data-position]:empty {
+  background-color: rgba(79, 70, 229, 0.05);
+}
+
+/* Stili per il feedback visivo durante il drag and drop su mobile */
+.potential-drop-target {
+  border: 2px dashed rgba(79, 70, 229, 0.5) !important;
+}
+
+.drop-highlight {
+  animation: pulse 0.3s ease-in-out;
+  border: 2px solid #4f46e5 !important;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }

@@ -556,11 +556,23 @@ export default function VolleyballApp() {
   // Aggiunge supporto per tocco su dispositivi mobili
   const handleTouchStart = (player) => {
     setDraggedPlayer(player);
+    
+    // Aggiungi feedback visivo per l'elemento che sta venendo trascinato
+    const touchTargets = document.querySelectorAll('[data-team][data-position]');
+    touchTargets.forEach(target => {
+      target.classList.add('potential-drop-target');
+    });
   };
   
   const handleTouchEnd = (e, team, position) => {
     e.preventDefault();
     if (!draggedPlayer) return;
+    
+    // Rimuovi il feedback visivo
+    const touchTargets = document.querySelectorAll('.potential-drop-target');
+    touchTargets.forEach(target => {
+      target.classList.remove('potential-drop-target');
+    });
     
     // Trova l'elemento HTML sotto il dito
     const touch = e.changedTouches[0];
@@ -573,8 +585,19 @@ export default function VolleyballApp() {
     }
     
     if (targetElement && targetElement.dataset.team && targetElement.dataset.position !== undefined) {
-      // Usa la funzione di drop esistente con i dati dell'elemento trovato
-      handleDrop({preventDefault: () => {}}, targetElement.dataset.team, parseInt(targetElement.dataset.position));
+      // Feedback visivo per l'elemento target
+      targetElement.classList.add('drop-highlight');
+      setTimeout(() => {
+        targetElement.classList.remove('drop-highlight');
+      }, 300);
+      
+      // Gestisci le riserve in modo speciale
+      if (targetElement.dataset.position === "reserve") {
+        handleDrop({preventDefault: () => {}}, targetElement.dataset.team, null);
+      } else {
+        // Usa la funzione di drop esistente con i dati dell'elemento trovato
+        handleDrop({preventDefault: () => {}}, targetElement.dataset.team, parseInt(targetElement.dataset.position));
+      }
     } else {
       // Annulla il drag&drop se non è stato trovato un target valido
       setDraggedPlayer(null);
@@ -3364,16 +3387,16 @@ export default function VolleyballApp() {
 
   // Render formation proposal view
   const renderFormationProposalView = () => {
-    const positionNames = {
-      0: "P1 (Servizio)",
-      1: "P2 (Opposto)",
-      2: "P3 (Centrale)",
-      3: "P4 (Schiacciatore)",
-      4: "P5 (Centrale)",
-      5: "P6 (Libero)"
+    const positionLabels = {
+      0: "P1",
+      1: "P2",
+      2: "P3",
+      3: "P4",
+      4: "P5",
+      5: "P6"
     };
 
-    const renderPlayer = (player, onClick = null) => (
+    const renderPlayer = (player, onClick = null, posLabel = null) => (
       <div
         key={player?.uid || 'empty'}
         className={`h-12 sm:h-16 w-20 sm:w-24 rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center text-center text-[10px] sm:text-xs transition-all duration-200 ${
@@ -3394,7 +3417,7 @@ export default function VolleyballApp() {
             {player.isFriend && <div className="text-[8px] sm:text-xs opacity-75">Amico</div>}
           </div>
         ) : (
-          <div className="text-gray-500">Vuoto</div>
+          <div className="text-gray-500">{posLabel || "Vuoto"}</div>
         )}
       </div>
     );
@@ -3415,8 +3438,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={3}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[3]}</div>
-            {renderPlayer(currentFormation[teamKey][3], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][3], handleReturnToAvailable, positionLabels[3])}
           </div>
           <div 
             className="flex flex-col items-center gap-1 sm:gap-2"
@@ -3426,8 +3448,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={2}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[2]}</div>
-            {renderPlayer(currentFormation[teamKey][2], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][2], handleReturnToAvailable, positionLabels[2])}
           </div>
           <div 
             className="flex flex-col items-center gap-1 sm:gap-2"
@@ -3437,8 +3458,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={1}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[1]}</div>
-            {renderPlayer(currentFormation[teamKey][1], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][1], handleReturnToAvailable, positionLabels[1])}
           </div>
 
           {/* Seconda fila */}
@@ -3450,8 +3470,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={4}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[4]}</div>
-            {renderPlayer(currentFormation[teamKey][4], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][4], handleReturnToAvailable, positionLabels[4])}
           </div>
           <div 
             className="flex flex-col items-center gap-1 sm:gap-2"
@@ -3461,8 +3480,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={5}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[5]}</div>
-            {renderPlayer(currentFormation[teamKey][5], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][5], handleReturnToAvailable, positionLabels[5])}
           </div>
           <div 
             className="flex flex-col items-center gap-1 sm:gap-2"
@@ -3472,8 +3490,7 @@ export default function VolleyballApp() {
             data-team={teamKey}
             data-position={0}
           >
-            <div className="text-[10px] sm:text-xs text-gray-400">{positionNames[0]}</div>
-            {renderPlayer(currentFormation[teamKey][0], handleReturnToAvailable)}
+            {renderPlayer(currentFormation[teamKey][0], handleReturnToAvailable, positionLabels[0])}
           </div>
         </div>
       </div>
@@ -3528,28 +3545,32 @@ export default function VolleyballApp() {
         {/* Riserve per squadra */}
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva Squadra A</h3>
+            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Squadra A</h3>
             <div className="flex justify-center">
               <div 
                 className="flex flex-col items-center gap-2"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, 'reserveTeam1', null)}
+                onTouchEnd={(e) => handleTouchEnd(e, 'reserveTeam1', null)}
+                data-team="reserveTeam1"
+                data-position="reserve"
               >
-                <div className="text-xs text-gray-400">Riserva A</div>
-                {renderPlayer(currentFormation.reserveTeam1, handleReturnToAvailable)}
+                {renderPlayer(currentFormation.reserveTeam1, handleReturnToAvailable, "Riserva")}
               </div>
             </div>
           </div>
           <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Riserva Squadra B</h3>
+            <h3 className="text-lg font-bold text-gray-100 mb-4 text-center">Squadra B</h3>
             <div className="flex justify-center">
               <div 
                 className="flex flex-col items-center gap-2"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, 'reserveTeam2', null)}
+                onTouchEnd={(e) => handleTouchEnd(e, 'reserveTeam2', null)}
+                data-team="reserveTeam2"
+                data-position="reserve"
               >
-                <div className="text-xs text-gray-400">Riserva B</div>
-                {renderPlayer(currentFormation.reserveTeam2, handleReturnToAvailable)}
+                {renderPlayer(currentFormation.reserveTeam2, handleReturnToAvailable, "Riserva")}
               </div>
             </div>
           </div>
@@ -3590,16 +3611,16 @@ export default function VolleyballApp() {
       );
     }
 
-    const positionNames = {
-      0: "P1 (Servizio)",
-      1: "P2 (Opposto)", 
-      2: "P3 (Centrale)",
-      3: "P4 (Schiacciatore)",
-      4: "P5 (Centrale)",
-      5: "P6 (Libero)"
+    const positionLabels = {
+      0: "P1",
+      1: "P2", 
+      2: "P3",
+      3: "P4",
+      4: "P5",
+      5: "P6"
     };
 
-    const renderCalculatedPlayer = (player) => (
+    const renderCalculatedPlayer = (player, posLabel = null) => (
       <div
         key={player?.uid || 'empty'}
         className={`h-16 w-24 rounded-lg border-2 flex items-center justify-center text-center text-xs transition-all duration-200 ${
@@ -3613,7 +3634,7 @@ export default function VolleyballApp() {
             <div className="font-medium">{player.name}</div>
           </div>
         ) : (
-          <div className="text-gray-500">Vuoto</div>
+          <div className="text-gray-500">{posLabel || "Vuoto"}</div>
         )}
       </div>
     );
@@ -3627,30 +3648,24 @@ export default function VolleyballApp() {
           
           {/* Prima fila */}
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[3]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][3])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][3], positionLabels[3])}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[2]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][2])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][2], positionLabels[2])}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[1]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][1])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][1], positionLabels[1])}
           </div>
 
           {/* Seconda fila */}
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[4]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][4])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][4], positionLabels[4])}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[5]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][5])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][5], positionLabels[5])}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <div className="text-xs text-gray-400">{positionNames[0]}</div>
-            {renderCalculatedPlayer(calculatedFormations[teamKey][0])}
+            {renderCalculatedPlayer(calculatedFormations[teamKey][0], positionLabels[0])}
           </div>
         </div>
       </div>
