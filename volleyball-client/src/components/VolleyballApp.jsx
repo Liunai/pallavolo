@@ -1262,9 +1262,14 @@ export default function VolleyballApp() {
         };
       });
       
-      // Calculate stats from actual sessions
+      // Calculate stats from actual sessions (excluding ignored ones)
       sessionsSnap.docs.forEach(sessionDoc => {
         const session = sessionDoc.data();
+        
+        // Skip ignored sessions
+        if (session.ignoredFromStats) {
+          return;
+        }
         
         // Count participants
         (session.participants || []).forEach(participant => {
@@ -1512,16 +1517,18 @@ export default function VolleyballApp() {
     const userSnap = await getDoc(doc(db, 'users', uid));
     const user = userSnap.exists() ? userSnap.data() : {};
 
-    // Load sessions where user participated
+    // Load sessions where user participated (excluding ignored sessions)
     const q = query(
       collection(db, 'sessions'),
       where('participantUids', 'array-contains', uid),
       orderBy('date', 'desc')
     );
     const sessionsSnap = await getDocs(q);
-    const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const sessions = sessionsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter(session => !session.ignoredFromStats); // Filtra sessioni ignorate
 
-    // Load sets where user participated
+    // Load sets where user participated (from non-ignored sessions only)
     const setsQuery = query(
       collection(db, 'matchSets'),
       where('participantUids', 'array-contains', uid),
@@ -1529,14 +1536,29 @@ export default function VolleyballApp() {
     );
     const setsSnap = await getDocs(setsQuery);
     const userSets = setsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    
+    // Filter out sets from ignored sessions
+    const validSets = [];
+    for (const set of userSets) {
+      // Verifica se il set appartiene a una sessione ignorata
+      if (set.matchId) {
+        const sessionSnap = await getDoc(doc(db, 'sessions', set.matchId));
+        if (sessionSnap.exists() && !sessionSnap.data().ignoredFromStats) {
+          validSets.push(set);
+        }
+      } else {
+        // Se non ha matchId, probabilmente è un set di una partita attiva, quindi valido
+        validSets.push(set);
+      }
+    }
 
-    // Calculate set statistics
+    // Calculate set statistics (using only valid sets from non-ignored sessions)
     let setsWon = 0;
     let setsLost = 0;
     let totalPointsFor = 0;
     let totalPointsAgainst = 0;
 
-    userSets.forEach(set => {
+    validSets.forEach(set => {
       const userTeam = set.teamA.some(p => p.uid === uid) ? 'A' : 'B';
       const userScore = userTeam === 'A' ? set.teamAScore : set.teamBScore;
       const opponentScore = userTeam === 'A' ? set.teamBScore : set.teamAScore;
@@ -1556,7 +1578,7 @@ export default function VolleyballApp() {
       asParticipant: user?.stats?.asParticipant || 0,
       asReserve: user?.stats?.asReserve || 0,
       friendsBrought: user?.stats?.friendsBrought || 0,
-      setsPlayed: userSets.length,
+      setsPlayed: validSets.length,
       setsWon: setsWon,
       setsLost: setsLost,
       pointsFor: totalPointsFor,
@@ -1671,21 +1693,55 @@ export default function VolleyballApp() {
   const handleIgnoreSession = async (sessionId) => {
     if (!isAdmin) return;
     
-    const confirmed = confirm('Sei sicuro di voler ignorare questa sessione dalle statistiche?');
-    if (!confirmed) return;
-
     try {
+      // Get current session data
+      const sessionSnap = await getDoc(doc(db, 'sessions', sessionId));
+      if (!sessionSnap.exists()) {
+        alert('Sessione non trovata');
+        return;
+      }
+      
+      const sessionData = sessionSnap.data();
+      const isCurrentlyIgnored = sessionData.ignoredFromStats;
+      const actionText = isCurrentlyIgnored ? 'riattivare' : 'ignorare';
+      
+      const confirmed = confirm(`Sei sicuro di voler ${actionText} questa sessione dalle statistiche?`);
+      if (!confirmed) return;
+
+      // Update session ignore status
       await setDoc(
         doc(db, 'sessions', sessionId),
-        { ignoredFromStats: true },
+        { ignoredFromStats: !isCurrentlyIgnored },
         { merge: true }
       );
       
-      alert('Sessione ignorata dalle statistiche');
+      // Adjust user statistics based on action
+      const multiplier = isCurrentlyIgnored ? 1 : -1; // +1 to add back, -1 to remove
+      
+      // Update participant statistics
+      const participantUpdates = (sessionData.participants || []).map((p) =>
+        updateDoc(doc(db, 'users', p.uid), {
+          'stats.totalSessions': increment(multiplier),
+          'stats.asParticipant': increment(multiplier),
+          'stats.friendsBrought': increment(multiplier * (p.friends?.length || 0)),
+        })
+      );
+      
+      // Update reserve statistics
+      const reserveUpdates = (sessionData.reserves || []).map((r) =>
+        updateDoc(doc(db, 'users', r.uid), {
+          'stats.asReserve': increment(multiplier),
+          'stats.friendsBrought': increment(multiplier * (r.friends?.length || 0)),
+        })
+      );
+      
+      await Promise.allSettled([...participantUpdates, ...reserveUpdates]);
+      
+      alert(`Sessione ${isCurrentlyIgnored ? 'riattivata nelle' : 'ignorata dalle'} statistiche`);
       loadMatchHistory();
     } catch (error) {
-      console.error('Errore nell\'ignorare la sessione:', error);
-      alert('Errore nell\'ignorare la sessione');
+      console.error('Errore nella gestione della sessione:', error);
+      alert('Errore nella gestione della sessione');
     }
   };
 
