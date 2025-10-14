@@ -1819,6 +1819,14 @@ export default function VolleyballApp() {
       setFriends([]);
       await loadUserStats(currentUser.uid);
 
+        // Aggiorna i dati della partita selezionata per aggiornare la lista partecipanti
+        if (selectedMatch?.id) {
+          const matchSnap = await getDoc(doc(db, 'activeMatches', selectedMatch.id));
+          const matchData = matchSnap.data();
+          setParticipants(Array.isArray(matchData?.participants) ? matchData.participants : []);
+          setReserves(Array.isArray(matchData?.reserves) ? matchData.reserves : []);
+        }
+
       // Controlla se è stato aggiunto alle riserve invece che ai partecipanti
       const totalAfterSignup = getTotalCount();
       if (!asReserve && totalAfterSignup > MAX_PARTICIPANTS) {
