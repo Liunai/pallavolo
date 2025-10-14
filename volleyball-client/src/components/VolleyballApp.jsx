@@ -2467,11 +2467,22 @@ export default function VolleyballApp() {
                 selectedMatch.participants.map((participant, index) => (
                   <div key={participant.uid + '_' + index} className="bg-green-900 rounded-lg p-3 border border-green-700">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={participant.photoURL}
-                        alt={participant.name}
-                        className="w-10 h-10 rounded-full border-2 border-green-500"
-                      />
+                      {participant.photoURL ? (
+                        <img
+                          src={participant.photoURL}
+                          alt={participant.name}
+                          className="w-10 h-10 rounded-full border-2 border-green-500"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className={`w-10 h-10 rounded-full border-2 border-green-500 bg-green-700 flex items-center justify-center text-white font-bold ${participant.photoURL ? 'hidden' : 'flex'}`}
+                      >
+                        👤
+                      </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-gray-100">{participant.name}</span>
@@ -3327,6 +3338,15 @@ export default function VolleyballApp() {
 
   // Render add set view
   const renderAddSetView = () => {
+    const positionNames = {
+      0: "P1 (Servizio)",
+      1: "P2 (Opposto)",
+      2: "P3 (Centrale)", 
+      3: "P4 (Schiacciatore)",
+      4: "P5 (Centrale)",
+      5: "P6 (Libero)"
+    };
+
     // Render player for sets - identico al sistema delle formazioni
     const renderPlayerForSet = (player, onClick = null) => (
       <div
