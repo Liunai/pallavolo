@@ -247,15 +247,11 @@ export default function VolleyballApp() {
               participants
             };
           }));
+          // Aggiorna solo i dati delle partite attive.
+          // Non cambiare automaticamente la vista: la navigazione deve essere controllata dall'utente
+          // o dagli handler espliciti (es. click su una partita). Questo evita che aggiornamenti
+          // realtime (es. una nuova iscrizione) forzino la navigazione di tutti gli utenti connessi.
           setActiveMatches(matches);
-          
-          // Update view based on active matches, but preserve MATCH_DETAIL view
-          if (currentView === VIEW_STATES.NO_MATCHES && matches.length > 0) {
-            setCurrentView(VIEW_STATES.MATCH_LIST);
-          } else if (currentView === VIEW_STATES.MATCH_LIST && matches.length === 0) {
-            setCurrentView(VIEW_STATES.NO_MATCHES);
-          }
-          // Non cambiare vista se siamo in MATCH_DETAIL per mantenere la vista dopo iscrizione/disiscrizione
         });
         
         return unsubscribe;
