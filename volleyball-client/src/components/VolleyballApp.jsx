@@ -71,6 +71,7 @@ export default function VolleyballApp() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
   const [activeMatches, setActiveMatches] = useState([]); // Lista di tutte le partite attive
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Flag per il primo caricamento
 
   // Formation proposal states
   const [formationProposals, setFormationProposals] = useState([]);
@@ -247,11 +248,21 @@ export default function VolleyballApp() {
               participants
             };
           }));
-          // Aggiorna solo i dati delle partite attive.
-          // Non cambiare automaticamente la vista: la navigazione deve essere controllata dall'utente
-          // o dagli handler espliciti (es. click su una partita). Questo evita che aggiornamenti
-          // realtime (es. una nuova iscrizione) forzino la navigazione di tutti gli utenti connessi.
+          
+          // Aggiorna i dati delle partite attive
           setActiveMatches(matches);
+          
+          // Solo al primo caricamento, imposta la vista appropriata
+          if (isInitialLoad) {
+            if (matches.length > 0) {
+              setCurrentView(VIEW_STATES.MATCH_LIST);
+            } else {
+              setCurrentView(VIEW_STATES.NO_MATCHES);
+            }
+            setIsInitialLoad(false); // Non sarà più il primo caricamento
+          }
+          // Per i caricamenti successivi, non cambiare la vista per evitare che 
+          // aggiornamenti realtime (es. iscrizioni) forzino la navigazione
         });
         
         return unsubscribe;
