@@ -1558,9 +1558,16 @@ export default function VolleyballApp() {
       orderBy('date', 'desc')
     );
     const sessionsSnap = await getDocs(q);
-    const sessions = sessionsSnap.docs
+    const allSessions = sessionsSnap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter(session => !session.ignoredFromStats); // Filtra sessioni ignorate
+    
+    // Filtra solo le sessioni già giocate (nel passato)
+    const now = new Date();
+    const playedSessions = allSessions.filter(session => {
+      const sessionDate = session.date?.toDate ? session.date.toDate() : new Date(session.date);
+      return sessionDate < now; // Solo sessioni nel passato
+    });
 
     // Load sets where user participated (from non-ignored sessions only)
     const setsQuery = query(
@@ -1608,7 +1615,7 @@ export default function VolleyballApp() {
     });
 
     setUserStats({
-      totalSessions: user?.stats?.totalSessions || 0,
+      totalSessions: playedSessions.length, // Usa solo sessioni già giocate
       asParticipant: user?.stats?.asParticipant || 0,
       asReserve: user?.stats?.asReserve || 0,
       friendsBrought: user?.stats?.friendsBrought || 0,
@@ -1618,7 +1625,7 @@ export default function VolleyballApp() {
       pointsFor: totalPointsFor,
       pointsAgainst: totalPointsAgainst,
       pointDifference: totalPointsFor - totalPointsAgainst,
-      sessionsHistory: sessions,
+      sessionsHistory: playedSessions, // Usa solo sessioni già giocate
     });
   };
 
@@ -2304,14 +2311,10 @@ export default function VolleyballApp() {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 md:gap-3">
+                <div className="grid grid-cols-1 gap-2 md:gap-3">
                   <div className="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600/50">
                     <div className="text-lg md:text-xl font-bold text-indigo-400">{userStats.totalSessions || 0}</div>
-                    <div className="text-xs text-gray-400">Partite totali</div>
-                  </div>
-                  <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                    <div className="text-xl font-bold text-purple-400">{userStats.friendsBrought || 0}</div>
-                    <div className="text-xs text-gray-400">Amici portati</div>
+                    <div className="text-xs text-gray-400">Partite giocate</div>
                   </div>
                 </div>
                 
