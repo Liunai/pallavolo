@@ -269,6 +269,16 @@ export default function VolleyballApp() {
     };
   }, []); // Rimossa dipendenza currentView che causava loop infinito
 
+  // Sincronizza selectedMatch con i dati aggiornati delle activeMatches
+  useEffect(() => {
+    if (selectedMatch && activeMatches.length > 0) {
+      const updatedMatch = activeMatches.find(match => match.id === selectedMatch.id);
+      if (updatedMatch) {
+        setSelectedMatch(updatedMatch);
+      }
+    }
+  }, [activeMatches, selectedMatch?.id]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
