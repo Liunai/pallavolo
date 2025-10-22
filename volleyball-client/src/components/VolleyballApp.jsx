@@ -815,7 +815,9 @@ export default function VolleyballApp() {
     });
     
     setAvailablePlayers(allPlayers);
-    setCurrentSet({
+    
+    // Inizializza il nuovo set
+    let newSet = {
       team1: Array(6).fill(null),
       team2: Array(6).fill(null), 
       reserveTeam1: null,
@@ -823,8 +825,34 @@ export default function VolleyballApp() {
       setNumber: (matchSets.length || 0) + 1,
       teamAScore: 0,
       teamBScore: 0
-    });
+    };
     
+    // Se esiste un set precedente, usa la sua formazione come base
+    if (matchSets.length > 0) {
+      const lastSet = matchSets[matchSets.length - 1];
+      
+      // Funzione helper per trovare il giocatore corrispondente nella lista disponibile
+      const findPlayerInAvailable = (originalPlayer) => {
+        if (!originalPlayer) return null;
+        return allPlayers.find(p => p.uid === originalPlayer.uid || p.name === originalPlayer.name);
+      };
+      
+      // Copia la formazione dell'ultimo set se i giocatori sono ancora disponibili
+      if (lastSet.teamA) {
+        newSet.team1 = lastSet.teamA.map(player => findPlayerInAvailable(player));
+      }
+      if (lastSet.teamB) {
+        newSet.team2 = lastSet.teamB.map(player => findPlayerInAvailable(player));
+      }
+      if (lastSet.reserveTeamA) {
+        newSet.reserveTeam1 = findPlayerInAvailable(lastSet.reserveTeamA);
+      }
+      if (lastSet.reserveTeamB) {
+        newSet.reserveTeam2 = findPlayerInAvailable(lastSet.reserveTeamB);
+      }
+    }
+    
+    setCurrentSet(newSet);
     setCurrentView(VIEW_STATES.ADD_SET);
   };
 
