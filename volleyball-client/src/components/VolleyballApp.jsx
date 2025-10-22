@@ -450,23 +450,32 @@ export default function VolleyballApp() {
       const userSnap = await getDoc(doc(db, 'users', uid));
       const user = userSnap.exists() ? userSnap.data() : {};
 
-      // Load sessions where user participated
+      // Load sessions where user participated (excluding ignored sessions)
       const q = query(
         collection(db, 'sessions'),
         where('participantUids', 'array-contains', uid),
         orderBy('date', 'desc')
       );
       const sessionsSnap = await getDocs(q);
-      const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const allSessions = sessionsSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter(session => !session.ignoredFromStats); // Filtra sessioni ignorate
+      
+      // Filtra solo le sessioni già giocate (nel passato)
+      const now = new Date();
+      const playedSessions = allSessions.filter(session => {
+        const sessionDate = session.date?.toDate ? session.date.toDate() : new Date(session.date);
+        return sessionDate < now; // Solo sessioni nel passato
+      });
 
       setSelectedUserStats({
         uid,
         displayName: user.customDisplayName || displayName,
-        totalSessions: user?.stats?.totalSessions || 0,
+        totalSessions: playedSessions.length, // Usa solo sessioni già giocate
         asParticipant: user?.stats?.asParticipant || 0,
         asReserve: user?.stats?.asReserve || 0,
-        friendsBrought: user?.stats?.friendsBrought || 0,
-        sessionsHistory: sessions,
+        // friendsBrought rimosso
+        sessionsHistory: playedSessions, // Usa solo sessioni già giocate
       });
       setShowUserStatsModal(true);
     } catch (error) {
@@ -1386,7 +1395,6 @@ export default function VolleyballApp() {
           totalSessions: 0,
           asParticipant: 0,
           asReserve: 0,
-          friendsBrought: 0,
         });
       }
       // Se l'utente sta resettando le proprie stats, aggiorniamo anche quelle
@@ -3440,11 +3448,7 @@ export default function VolleyballApp() {
                         <div className="flex gap-2 md:gap-3 text-xs">
                           <div className="text-center">
                             <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
-                            <div className="text-gray-400">Partite</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-bold text-purple-400">{user.stats?.friendsBrought || 0}</div>
-                            <div className="text-gray-400">Amici</div>
+                            <div className="text-gray-400">Partite giocate</div>
                           </div>
                         </div>
                       </div>
@@ -4401,14 +4405,10 @@ export default function VolleyballApp() {
                 </button>
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
                   <div className="text-xl font-bold text-indigo-400">{selectedUserStats.totalSessions || 0}</div>
-                  <div className="text-xs text-gray-400">Partite totali</div>
-                </div>
-                <div className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/50">
-                  <div className="text-xl font-bold text-purple-400">{selectedUserStats.friendsBrought || 0}</div>
-                  <div className="text-xs text-gray-400">Amici portati</div>
+                  <div className="text-xs text-gray-400">Partite giocate</div>
                 </div>
               </div>
               
