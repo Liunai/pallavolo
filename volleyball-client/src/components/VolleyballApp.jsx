@@ -18,6 +18,7 @@ import {
   orderBy,
   getDocs,
   increment,
+  limit,
 } from 'firebase/firestore';
 
 const MAX_PARTICIPANTS = 14;
@@ -32,7 +33,8 @@ const VIEW_STATES = {
   FORMATION_PROPOSAL: 'formation_proposal',
   FORMATION_RESULT: 'formation_result',
   ADD_SET: 'add_set',
-  SET_DETAIL: 'set_detail'
+  SET_DETAIL: 'set_detail',
+  COPPA_PASTE: 'coppa_paste'
 };
 
 export default function VolleyballApp() {
@@ -107,6 +109,11 @@ export default function VolleyballApp() {
   const SUPER_ADMIN_EMAIL = 'tidolamiamail@gmail.com';
   const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
   const isAdmin = userRole === 'admin' || isSuperAdmin;
+  const isCapitana = userRole === 'capitana' || isSuperAdmin;
+
+  // Coppa Paste states
+  const [coppaPasteUsers, setCoppaPasteUsers] = useState([]);
+  const [newCoppaPasteUser, setNewCoppaPasteUser] = useState('');
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -1749,6 +1756,153 @@ export default function VolleyballApp() {
     }
   };
 
+  // Coppa Paste Management Functions
+  const loadCoppaPasteData = async () => {
+    try {
+      const q = query(collection(db, 'coppaPaste'), orderBy('name', 'asc'));
+      const snapshot = await getDocs(q);
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setCoppaPasteUsers(users);
+    } catch (error) {
+      console.error('Error loading coppa paste data:', error);
+      alert('Errore nel caricamento dei dati Coppa Paste');
+    }
+  };
+
+  const getLastMatchDate = async () => {
+    try {
+      const q = query(collection(db, 'sessions'), orderBy('date', 'desc'), limit(1));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const lastSession = snapshot.docs[0].data();
+        return lastSession.date?.toDate ? lastSession.date.toDate() : new Date();
+      }
+    } catch (error) {
+      console.error('Error getting last match date:', error);
+    }
+    return new Date();
+  };
+
+  const addCoppaPasteUser = async () => {
+    if (!newCoppaPasteUser.trim()) return;
+    
+    try {
+      const lastMatchDate = await getLastMatchDate();
+      const userData = {
+        name: newCoppaPasteUser.trim(),
+        ammonizioni: [null, null, null], // 3 slots per ammonizioni
+        debitoEspiato: null,
+        coppaPaste: 0,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser.uid
+      };
+      
+      await addDoc(collection(db, 'coppaPaste'), userData);
+      setNewCoppaPasteUser('');
+      await loadCoppaPasteData();
+      alert('Utente aggiunto alla Coppa Paste');
+    } catch (error) {
+      console.error('Error adding coppa paste user:', error);
+      alert('Errore nell\'aggiunta dell\'utente');
+    }
+  };
+
+  const addAmmonizione = async (userId, ammonitionIndex) => {
+    try {
+      const lastMatchDate = await getLastMatchDate();
+      const userRef = doc(db, 'coppaPaste', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) return;
+      
+      const userData = userSnap.data();
+      const newAmmonizioni = [...userData.ammonizioni];
+      newAmmonizioni[ammonitionIndex] = lastMatchDate.toISOString().split('T')[0]; // formato YYYY-MM-DD
+      
+      // Se è la terza ammonizione, incrementa coppa paste e resetta le ammonizioni
+      let newCoppaPaste = userData.coppaPaste || 0;
+      if (ammonitionIndex === 2) { // terza ammonizione (index 2)
+        newCoppaPaste += 1;
+        // Le ammonizioni rimangono visibili ma si può iniziare un nuovo ciclo
+      }
+      
+      await updateDoc(userRef, {
+        ammonizioni: newAmmonizioni,
+        coppaPaste: newCoppaPaste
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error adding ammonizione:', error);
+      alert('Errore nell\'aggiunta dell\'ammonizione');
+    }
+  };
+
+  const updateAmmonizione = async (userId, ammonitionIndex, newDate) => {
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) return;
+      
+      const userData = userSnap.data();
+      const newAmmonizioni = [...userData.ammonizioni];
+      newAmmonizioni[ammonitionIndex] = newDate;
+      
+      await updateDoc(userRef, {
+        ammonizioni: newAmmonizioni
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error updating ammonizione:', error);
+      alert('Errore nell\'aggiornamento dell\'ammonizione');
+    }
+  };
+
+  const setDebitoEspiato = async (userId) => {
+    try {
+      const lastMatchDate = await getLastMatchDate();
+      const userRef = doc(db, 'coppaPaste', userId);
+      
+      await updateDoc(userRef, {
+        debitoEspiato: lastMatchDate.toISOString().split('T')[0],
+        ammonizioni: [null, null, null] // resetta tutte le ammonizioni
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error setting debito espiato:', error);
+      alert('Errore nell\'impostazione del debito espiato');
+    }
+  };
+
+  const updateCoppaPaste = async (userId, newValue) => {
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      await updateDoc(userRef, {
+        coppaPaste: parseFloat(newValue) || 0
+      });
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error updating coppa paste:', error);
+      alert('Errore nell\'aggiornamento della coppa paste');
+    }
+  };
+
+  const deleteCoppaPasteUser = async (userId, userName) => {
+    if (!confirm(`Sei sicuro di voler eliminare ${userName} dalla Coppa Paste?`)) return;
+    
+    try {
+      await deleteDoc(doc(db, 'coppaPaste', userId));
+      await loadCoppaPasteData();
+      alert('Utente eliminato dalla Coppa Paste');
+    } catch (error) {
+      console.error('Error deleting coppa paste user:', error);
+      alert('Errore nell\'eliminazione dell\'utente');
+    }
+  };
+
   // Function to mark session as ignored in statistics
   const handleIgnoreSession = async (sessionId) => {
     if (!isAdmin) return;
@@ -2212,6 +2366,7 @@ export default function VolleyballApp() {
             <h1 className={`text-lg md:text-2xl font-bold truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
               {currentView === VIEW_STATES.MATCH_HISTORY ? 'Storico Partite' : 
                currentView === VIEW_STATES.USERS_LIST ? 'Lista Utenti' : 
+               currentView === VIEW_STATES.COPPA_PASTE ? 'Coppa Paste' :
                currentView === VIEW_STATES.FORMATION_PROPOSAL ? 'Proponi Formazione' :
                currentView === VIEW_STATES.FORMATION_RESULT ? 'Formazioni Proposte' :
                currentView === VIEW_STATES.ADD_SET ? 'Aggiungi Set' :
@@ -3460,30 +3615,42 @@ export default function VolleyballApp() {
                         <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium ${
                           user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
                           user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
+                          user.role === 'capitana' ? 'bg-purple-900 text-purple-200' :
                           'bg-gray-600 text-gray-200'
                         }`}>
                           {user.email === SUPER_ADMIN_EMAIL ? 'Admin' : 
-                           user.role === 'admin' ? 'Admin' : 'Utente'}
+                           user.role === 'admin' ? 'Admin' : 
+                           user.role === 'capitana' ? 'Capitana' : 'Utente'}
                         </span>
                       )}
                       
-                      {/* Role change buttons - admins can promote to admin, only super-admin can demote admins */}
+                      {/* Role change buttons - admins can promote to admin, only super-admin can assign all roles */}
                       {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
-                        <div className="flex gap-1 md:gap-2">
-                          {user.role !== 'admin' && (
-                            <button
-                              onClick={() => handleChangeUserRole(user.id, 'admin')}
-                              className="px-2 md:px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
-                            >
-                              Rendi Admin
-                            </button>
+                        <div className="flex gap-1 md:gap-2 flex-wrap">
+                          {user.role === 'user' && (
+                            <>
+                              <button
+                                onClick={() => handleChangeUserRole(user.id, 'admin')}
+                                className="px-2 md:px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                              >
+                                Admin
+                              </button>
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => handleChangeUserRole(user.id, 'capitana')}
+                                  className="px-2 md:px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition"
+                                >
+                                  Capitana
+                                </button>
+                              )}
+                            </>
                           )}
-                          {user.role === 'admin' && isSuperAdmin && (
+                          {(user.role === 'admin' || user.role === 'capitana') && isSuperAdmin && (
                             <button
                               onClick={() => handleChangeUserRole(user.id, 'user')}
                               className="px-2 md:px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
                             >
-                              Rendi Utente
+                              Utente
                             </button>
                           )}
                         </div>
@@ -3514,6 +3681,156 @@ export default function VolleyballApp() {
             </div>
           </div>
         )}
+      </div>
+    );
+  };
+
+  // Render Coppa Paste view
+  const renderCoppaPasteView = () => {
+    const canAddAmmonizione = (ammonizioni, index) => {
+      if (index === 0) return ammonizioni[0] === null;
+      if (index === 1) return ammonizioni[0] !== null && ammonizioni[1] === null;
+      if (index === 2) return ammonizioni[0] !== null && ammonizioni[1] !== null && ammonizioni[2] === null;
+      return false;
+    };
+
+    const hasThreeAmmonizioni = (ammonizioni) => {
+      return ammonizioni[0] !== null && ammonizioni[1] !== null && ammonizioni[2] !== null;
+    };
+
+    const canStartNewCycle = (ammonizioni) => {
+      return hasThreeAmmonizioni(ammonizioni);
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Coppa Paste</h2>
+          
+          {/* Add new user */}
+          <div className="mb-6 p-4 bg-gray-700/50 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">Aggiungi Utente</h3>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={newCoppaPasteUser}
+                onChange={(e) => setNewCoppaPasteUser(e.target.value)}
+                placeholder="Nome utente..."
+                className="flex-1 px-3 py-2 bg-gray-600 text-gray-100 border border-gray-500 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                onKeyPress={(e) => e.key === 'Enter' && addCoppaPasteUser()}
+              />
+              <button
+                onClick={addCoppaPasteUser}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              >
+                Aggiungi
+              </button>
+            </div>
+          </div>
+
+          {/* Users list */}
+          <div className="space-y-4">
+            {coppaPasteUsers.map((user) => (
+              <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  
+                  {/* User info */}
+                  <div className="flex-shrink-0">
+                    <h3 className="font-semibold text-gray-100 text-lg">{user.name}</h3>
+                  </div>
+
+                  {/* Ammonizioni */}
+                  <div className="flex flex-col lg:flex-row gap-4 flex-1 lg:justify-center">
+                    <div className="grid grid-cols-3 gap-2 lg:gap-4">
+                      {[0, 1, 2].map((index) => (
+                        <div key={index} className="text-center">
+                          <div className="text-xs text-gray-400 mb-1">Amm. {index + 1}</div>
+                          <div className={`p-2 rounded border min-h-[60px] flex flex-col justify-center items-center ${
+                            hasThreeAmmonizioni(user.ammonizioni) && index === 2 
+                              ? 'bg-red-900/50 border-red-500' 
+                              : 'bg-gray-600/50 border-gray-500'
+                          }`}>
+                            {user.ammonizioni[index] ? (
+                              <div className="w-full">
+                                <input
+                                  type="date"
+                                  value={user.ammonizioni[index]}
+                                  onChange={(e) => updateAmmonizione(user.id, index, e.target.value)}
+                                  className="w-full text-xs bg-transparent border-none text-center text-gray-100"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-500">-</div>
+                            )}
+                          </div>
+                          
+                          {/* Add ammonizione button */}
+                          {(canAddAmmonizione(user.ammonizioni, index) || (canStartNewCycle(user.ammonizioni) && index === 0)) && (
+                            <button
+                              onClick={() => addAmmonizione(user.id, index)}
+                              className="mt-1 px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                            >
+                              {canStartNewCycle(user.ammonizioni) && index === 0 ? 'Nuovo ciclo' : '+'}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col lg:flex-row gap-3 lg:items-center flex-shrink-0">
+                    
+                    {/* Debito Espiato */}
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Debito Espiato</div>
+                      <div className="p-2 bg-gray-600/50 border border-gray-500 rounded min-h-[40px] flex items-center justify-center">
+                        {user.debitoEspiato ? (
+                          <div className="text-xs text-green-400">{user.debitoEspiato}</div>
+                        ) : (
+                          <div className="text-xs text-gray-500">-</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setDebitoEspiato(user.id)}
+                        className="mt-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition"
+                      >
+                        Espiato
+                      </button>
+                    </div>
+
+                    {/* Coppa Paste Value */}
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Coppa Paste</div>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={user.coppaPaste || 0}
+                        onChange={(e) => updateCoppaPaste(user.id, e.target.value)}
+                        className="w-20 p-2 bg-gray-600 text-gray-100 border border-gray-500 rounded text-center text-sm"
+                      />
+                    </div>
+
+                    {/* Delete user */}
+                    <button
+                      onClick={() => deleteCoppaPasteUser(user.id, user.name)}
+                      className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition self-center"
+                      title="Elimina utente"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {coppaPasteUsers.length === 0 && (
+              <div className="text-center py-8 text-gray-400">
+                Nessun utente nella Coppa Paste
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
@@ -4335,6 +4652,27 @@ export default function VolleyballApp() {
               <UserCheck className="w-5 h-5 md:w-6 md:h-6" />
               <span className="text-xs">Utenti</span>
             </button>
+            
+            {/* Coppa Paste - accessible only to super admin and capitana */}
+            {(isSuperAdmin || isCapitana) && (
+              <button
+                onClick={() => {
+                  loadCoppaPasteData();
+                  setCurrentView(VIEW_STATES.COPPA_PASTE);
+                }}
+                className={`flex flex-col items-center gap-1 p-1 md:p-2 rounded-lg transition ${
+                  currentView === VIEW_STATES.COPPA_PASTE 
+                  ? 'bg-red-600 text-white' 
+                  : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Coppa Paste"
+              >
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs">Coppa</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -4378,6 +4716,7 @@ export default function VolleyballApp() {
             {currentView === VIEW_STATES.MATCH_DETAIL && renderMatchDetailView()}
             {currentView === VIEW_STATES.MATCH_HISTORY && renderMatchHistoryView()}
             {currentView === VIEW_STATES.USERS_LIST && renderUsersListView()}
+            {currentView === VIEW_STATES.COPPA_PASTE && renderCoppaPasteView()}
             {currentView === VIEW_STATES.FORMATION_PROPOSAL && renderFormationProposalView()}
             {currentView === VIEW_STATES.ADD_SET && renderAddSetView()}
             {currentView === VIEW_STATES.SET_DETAIL && renderSetDetailView()}
