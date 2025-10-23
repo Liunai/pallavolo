@@ -3829,55 +3829,65 @@ export default function VolleyballApp() {
           </div>
           
           {/* Users list */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {coppaPasteUsers.map((user) => (
               <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  
-                  {/* User info */}
-                  <div className="flex-shrink-0">
-                    <h3 className="font-semibold text-gray-100 text-lg flex items-center gap-2">
+                
+                {/* Header con nome utente */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-gray-100 text-lg">
                       {user.name}
-                      {!user.userExists && (
-                        <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">
-                          Utente eliminato
-                        </span>
-                      )}
                     </h3>
+                    {!user.userExists && (
+                      <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">
+                        Utente eliminato
+                      </span>
+                    )}
                   </div>
+                  <button
+                    onClick={() => deleteCoppaPasteUser(user.id, user.name)}
+                    className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                    title="Elimina utente"
+                  >
+                    🗑️ Elimina
+                  </button>
+                </div>
 
-                  {/* Ammonizioni */}
-                  <div className="flex flex-col lg:flex-row gap-4 flex-1 lg:justify-center">
-                    <div className="grid grid-cols-3 gap-2 lg:gap-4">
+                {/* Grid principale con contenuto organizzato */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                  
+                  {/* Sezione Ammonizioni - occupa spazio principale */}
+                  <div className="lg:col-span-7">
+                    <div className="text-sm font-medium text-gray-300 mb-3">Ammonizioni</div>
+                    <div className="grid grid-cols-3 gap-3">
                       {[0, 1, 2].map((index) => (
                         <div key={index} className="text-center">
-                          <div className="text-xs text-gray-400 mb-1">Amm. {index + 1}</div>
-                          <div className={`p-2 rounded border min-h-[60px] flex flex-col justify-center items-center ${
+                          <div className="text-xs text-gray-400 mb-2 font-medium">#{index + 1}</div>
+                          <div className={`p-3 rounded-lg border-2 min-h-[70px] flex flex-col justify-center items-center transition-colors ${
                             hasThreeAmmonizioni(user.ammonizioni) && index === 2 
-                              ? 'bg-red-900/50 border-red-500' 
-                              : 'bg-gray-600/50 border-gray-500'
+                              ? 'bg-red-900/30 border-red-500/70' 
+                              : 'bg-gray-600/30 border-gray-500/50'
                           }`}>
                             {user.ammonizioni[index] ? (
-                              <div className="w-full">
-                                <input
-                                  type="date"
-                                  value={user.ammonizioni[index]}
-                                  onChange={(e) => updateAmmonizione(user.id, index, e.target.value)}
-                                  className="w-full text-xs bg-transparent border-none text-center text-gray-100"
-                                />
-                              </div>
+                              <input
+                                type="date"
+                                value={user.ammonizioni[index]}
+                                onChange={(e) => updateAmmonizione(user.id, index, e.target.value)}
+                                className="w-full text-xs bg-transparent border-none text-center text-gray-100 focus:outline-none"
+                              />
                             ) : (
-                              <div className="text-xs text-gray-500">-</div>
+                              <span className="text-sm text-gray-500">—</span>
                             )}
                           </div>
                           
-                          {/* Add ammonizione button */}
+                          {/* Pulsante aggiungi ammonizione */}
                           {(canAddAmmonizione(user.ammonizioni, index) || (canStartNewCycle(user.ammonizioni) && index === 0)) && (
                             <button
                               onClick={() => addAmmonizione(user.id, index)}
-                              className="mt-1 px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                              className="mt-2 px-3 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700 transition font-medium"
                             >
-                              {canStartNewCycle(user.ammonizioni) && index === 0 ? 'Nuovo ciclo' : '+'}
+                              {canStartNewCycle(user.ammonizioni) && index === 0 ? 'Nuovo ciclo' : '+ Ammonizione'}
                             </button>
                           )}
                         </div>
@@ -3885,48 +3895,43 @@ export default function VolleyballApp() {
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col lg:flex-row gap-3 lg:items-center flex-shrink-0">
-                    
-                    {/* Debito Espiato */}
-                    <div className="text-center">
-                      <div className="text-xs text-gray-400 mb-1">Debito Espiato</div>
-                      <div className="p-2 bg-gray-600/50 border border-gray-500 rounded min-h-[40px] flex items-center justify-center">
-                        {user.debitoEspiato ? (
-                          <div className="text-xs text-green-400">{user.debitoEspiato}</div>
-                        ) : (
-                          <div className="text-xs text-gray-500">-</div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => setDebitoEspiato(user.id)}
-                        className="mt-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition"
-                      >
-                        Espiato
-                      </button>
+                  {/* Sezione Debito Espiato */}
+                  <div className="lg:col-span-2">
+                    <div className="text-sm font-medium text-gray-300 mb-3 text-center">Debito Espiato</div>
+                    <div className="bg-gray-600/30 border-2 border-gray-500/50 rounded-lg p-3 min-h-[70px] flex items-center justify-center mb-2">
+                      {user.debitoEspiato ? (
+                        <div className="text-sm text-green-400 font-medium">{user.debitoEspiato}</div>
+                      ) : (
+                        <span className="text-sm text-gray-500">—</span>
+                      )}
                     </div>
-
-                    {/* Coppa Paste Value */}
-                    <div className="text-center">
-                      <div className="text-xs text-gray-400 mb-1">Coppa Paste</div>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={user.coppaPaste || 0}
-                        onChange={(e) => updateCoppaPaste(user.id, e.target.value)}
-                        className="w-20 p-2 bg-gray-600 text-gray-100 border border-gray-500 rounded text-center text-sm"
-                      />
-                    </div>
-
-                    {/* Delete user */}
                     <button
-                      onClick={() => deleteCoppaPasteUser(user.id, user.name)}
-                      className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition self-center"
-                      title="Elimina utente"
+                      onClick={() => setDebitoEspiato(user.id)}
+                      className="w-full px-3 py-1 bg-green-600 text-white rounded-md text-xs hover:bg-green-700 transition font-medium"
                     >
-                      🗑️
+                      Segna Espiato
                     </button>
                   </div>
+
+                  {/* Sezione Coppa Paste */}
+                  <div className="lg:col-span-3">
+                    <div className="text-sm font-medium text-gray-300 mb-3 text-center">Valore Coppa Paste</div>
+                    <div className="flex items-center justify-center">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={user.coppaPaste || 0}
+                          onChange={(e) => updateCoppaPaste(user.id, e.target.value)}
+                          className="w-24 h-14 text-xl font-bold bg-gray-600/50 text-gray-100 border-2 border-gray-500/50 rounded-lg text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                        />
+                        <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-400">
+                          punti
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             ))}
