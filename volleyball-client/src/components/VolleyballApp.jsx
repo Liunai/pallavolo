@@ -1771,8 +1771,11 @@ export default function VolleyballApp() {
       const coppaPasteQuery = query(collection(db, 'coppaPaste'));
       const coppaPasteSnapshot = await getDocs(coppaPasteQuery);
       const existingCoppaPasteData = {};
-      coppaPasteSnapshot.docs.forEach(doc => {
-        existingCoppaPasteData[doc.data().userId] = { id: doc.id, ...doc.data() };
+      coppaPasteSnapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        // Use explicit userId when present, otherwise fallback to the document id
+        const key = data.userId || docSnap.id;
+        existingCoppaPasteData[key] = { id: docSnap.id, ...data };
       });
 
       // Sincronizza: crea dati coppa paste per utenti che non li hanno ancora
@@ -1976,6 +1979,7 @@ export default function VolleyballApp() {
       
       const userRef = doc(db, 'coppaPaste', manualUserId);
       await setDoc(userRef, {
+        userId: manualUserId,
         name: userName,
         ammonizioni: [null, null, null],
         coppaPaste: 0,
