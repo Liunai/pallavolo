@@ -113,6 +113,7 @@ export default function VolleyballApp() {
 
   // Coppa Paste states
   const [coppaPasteUsers, setCoppaPasteUsers] = useState([]);
+  const [coppaPasteNewUser, setCoppaPasteNewUser] = useState('');
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -1954,6 +1955,44 @@ export default function VolleyballApp() {
     }
   };
 
+  const addUserToCoppaPaste = async () => {
+    if (!coppaPasteNewUser.trim()) return;
+    
+    const userName = coppaPasteNewUser.trim();
+    
+    try {
+      // Generate a unique ID for manual users
+      const manualUserId = `manual_${Date.now()}_${userName.replace(/\s+/g, '_').toLowerCase()}`;
+      
+      // Check if user already exists
+      const existingUser = coppaPasteUsers.find(user => 
+        user.name.toLowerCase() === userName.toLowerCase()
+      );
+      
+      if (existingUser) {
+        alert('Un utente con questo nome è già presente nella Coppa Paste');
+        return;
+      }
+      
+      const userRef = doc(db, 'coppaPaste', manualUserId);
+      await setDoc(userRef, {
+        name: userName,
+        ammonizioni: [null, null, null],
+        coppaPaste: 0,
+        debitoEspiato: null,
+        userExists: false, // This is a manual entry
+        createdAt: serverTimestamp()
+      });
+      
+      setCoppaPasteNewUser('');
+      await loadCoppaPasteData();
+      alert(`Utente ${userName} aggiunto alla Coppa Paste`);
+    } catch (error) {
+      console.error('Error adding user to coppa paste:', error);
+      alert('Errore nell\'aggiunta dell\'utente');
+    }
+  };
+
   // Function to mark session as ignored in statistics
   const handleIgnoreSession = async (sessionId) => {
     if (!isAdmin) return;
@@ -2425,10 +2464,10 @@ export default function VolleyballApp() {
                'Pallavolo - 7 fighters'}
             </h1>
             {/* Subtitle visible only for logged users */}
-            {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && sessionDate ? (
+            {isLoggedIn && (currentView === VIEW_STATES.MATCH_DETAIL && selectedMatch ? (
               <div className="mt-1 md:mt-2 flex items-center gap-3 flex-wrap">
                 <div className="text-sm md:text-lg text-indigo-300 font-semibold">
-                  Partita del {new Date(sessionDate).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
+                  Partita del {new Date(selectedMatch.date).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}
                 </div>
                 {/* Tag stato partita */}
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -2709,13 +2748,13 @@ export default function VolleyballApp() {
                     className="flex-1 cursor-pointer"
                   >
                     <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
-                      Partita di Pallavolo
-                    </h3>
-                    <p className="text-sm md:text-base text-gray-400 mt-1">
                       {new Date(match.date).toLocaleString('it-IT', { 
                         dateStyle: 'short', 
                         timeStyle: 'short' 
                       })}
+                    </h3>
+                    <p className="text-sm md:text-base text-gray-400 mt-1">
+                      Partita di Pallavolo
                     </p>
                   </div>
                   <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
@@ -3757,7 +3796,28 @@ export default function VolleyballApp() {
       <div className="space-y-6">
         <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
           <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-6">Coppa Paste</h2>
-          <p className="text-gray-400 text-sm mb-4">Tutti gli utenti registrati vengono automaticamente inclusi. Puoi rimuoverli se necessario.</p>
+          <p className="text-gray-400 text-sm mb-4">Tutti gli utenti registrati vengono automaticamente inclusi. Puoi anche aggiungere utenti manualmente per nome.</p>
+          
+          {/* Add user form */}
+          <div className="mb-6 p-4 bg-gray-700 rounded-lg border border-gray-600">
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">Aggiungi Utente per Nome</h3>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={coppaPasteNewUser}
+                onChange={(e) => setCoppaPasteNewUser(e.target.value)}
+                placeholder="Nome dell'utente"
+                className="flex-1 px-4 py-2 bg-gray-600 text-gray-100 border border-gray-500 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+              <button
+                onClick={addUserToCoppaPaste}
+                disabled={!coppaPasteNewUser.trim()}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition"
+              >
+                Aggiungi
+              </button>
+            </div>
+          </div>
           
           {/* Users list */}
           <div className="space-y-4">
