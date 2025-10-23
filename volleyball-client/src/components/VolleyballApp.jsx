@@ -1759,13 +1759,18 @@ export default function VolleyballApp() {
   // Coppa Paste Management Functions
   const loadCoppaPasteData = async () => {
     try {
-      // Carica tutti gli utenti del sito
-      const usersQuery = query(collection(db, 'users'), orderBy('customDisplayName'), orderBy('displayName'));
+      // Carica tutti gli utenti del sito (senza orderBy multipli per evitare problemi con campi null)
+      const usersQuery = query(collection(db, 'users'));
       const usersSnapshot = await getDocs(usersQuery);
       const allSiteUsers = usersSnapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data() 
-      }));
+      })).sort((a, b) => {
+        // Ordina per customDisplayName se disponibile, altrimenti per displayName
+        const nameA = a.customDisplayName || a.displayName || 'Utente sconosciuto';
+        const nameB = b.customDisplayName || b.displayName || 'Utente sconosciuto';
+        return nameA.localeCompare(nameB);
+      });
 
       // Carica i dati esistenti della coppa paste
       const coppaPasteQuery = query(collection(db, 'coppaPaste'));
