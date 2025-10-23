@@ -113,7 +113,6 @@ export default function VolleyballApp() {
 
   // Coppa Paste states
   const [coppaPasteUsers, setCoppaPasteUsers] = useState([]);
-  const [newCoppaPasteUser, setNewCoppaPasteUser] = useState('');
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -1759,10 +1758,84 @@ export default function VolleyballApp() {
   // Coppa Paste Management Functions
   const loadCoppaPasteData = async () => {
     try {
-      const q = query(collection(db, 'coppaPaste'), orderBy('name', 'asc'));
-      const snapshot = await getDocs(q);
-      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCoppaPasteUsers(users);
+      // Carica tutti gli utenti del sito
+      const usersQuery = query(collection(db, 'users'), orderBy('customDisplayName'), orderBy('displayName'));
+      const usersSnapshot = await getDocs(usersQuery);
+      const allSiteUsers = usersSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+
+      // Carica i dati esistenti della coppa paste
+      const coppaPasteQuery = query(collection(db, 'coppaPaste'));
+      const coppaPasteSnapshot = await getDocs(coppaPasteQuery);
+      const existingCoppaPasteData = {};
+      coppaPasteSnapshot.docs.forEach(doc => {
+        existingCoppaPasteData[doc.data().userId] = { id: doc.id, ...doc.data() };
+      });
+
+      // Sincronizza: crea dati coppa paste per utenti che non li hanno ancora
+      const lastMatchDate = await getLastMatchDate();
+      const promises = [];
+      
+      allSiteUsers.forEach(user => {
+        if (!existingCoppaPasteData[user.id]) {
+          // Crea nuovo record coppa paste per questo utente
+          const userData = {
+            userId: user.id,
+            name: user.customDisplayName || user.displayName || 'Utente sconosciuto',
+            ammonizioni: [null, null, null],
+            debitoEspiato: null,
+            coppaPaste: 0,
+            createdAt: serverTimestamp(),
+            autoCreated: true // flag per distinguere utenti auto-creati da quelli aggiunti manualmente
+          };
+          promises.push(addDoc(collection(db, 'coppaPaste'), userData));
+        }
+      });
+
+      // Attendi che tutti i nuovi record siano creati
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+
+      // Ricarica tutti i dati aggiornati e sincronizzali con gli utenti del sito
+      const updatedCoppaPasteQuery = query(collection(db, 'coppaPaste'));
+      const updatedCoppaPasteSnapshot = await getDocs(updatedCoppaPasteQuery);
+      const coppaPasteUsers = [];
+      
+      updatedCoppaPasteSnapshot.docs.forEach(doc => {
+        const coppaPasteData = { id: doc.id, ...doc.data() };
+        
+        // Trova l'utente corrispondente dal sito
+        const siteUser = allSiteUsers.find(u => u.id === coppaPasteData.userId);
+        if (siteUser) {
+          // Aggiorna il nome se è cambiato
+          const currentName = siteUser.customDisplayName || siteUser.displayName || 'Utente sconosciuto';
+          if (coppaPasteData.name !== currentName) {
+            // Aggiorna il nome nel database
+            updateDoc(doc(db, 'coppaPaste', coppaPasteData.id), { name: currentName });
+            coppaPasteData.name = currentName;
+          }
+          
+          coppaPasteUsers.push({
+            ...coppaPasteData,
+            userExists: true,
+            siteUserData: siteUser
+          });
+        } else {
+          // Utente coppa paste senza corrispondente utente del sito (probabilmente eliminato)
+          coppaPasteUsers.push({
+            ...coppaPasteData,
+            userExists: false
+          });
+        }
+      });
+
+      // Ordina per nome
+      coppaPasteUsers.sort((a, b) => a.name.localeCompare(b.name));
+      setCoppaPasteUsers(coppaPasteUsers);
+      
     } catch (error) {
       console.error('Error loading coppa paste data:', error);
       alert('Errore nel caricamento dei dati Coppa Paste');
@@ -1783,29 +1856,7 @@ export default function VolleyballApp() {
     return new Date();
   };
 
-  const addCoppaPasteUser = async () => {
-    if (!newCoppaPasteUser.trim()) return;
-    
-    try {
-      const lastMatchDate = await getLastMatchDate();
-      const userData = {
-        name: newCoppaPasteUser.trim(),
-        ammonizioni: [null, null, null], // 3 slots per ammonizioni
-        debitoEspiato: null,
-        coppaPaste: 0,
-        createdAt: serverTimestamp(),
-        createdBy: currentUser.uid
-      };
-      
-      await addDoc(collection(db, 'coppaPaste'), userData);
-      setNewCoppaPasteUser('');
-      await loadCoppaPasteData();
-      alert('Utente aggiunto alla Coppa Paste');
-    } catch (error) {
-      console.error('Error adding coppa paste user:', error);
-      alert('Errore nell\'aggiunta dell\'utente');
-    }
-  };
+
 
   const addAmmonizione = async (userId, ammonitionIndex) => {
     try {
@@ -3705,29 +3756,9 @@ export default function VolleyballApp() {
     return (
       <div className="space-y-6">
         <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Coppa Paste</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-6">Coppa Paste</h2>
+          <p className="text-gray-400 text-sm mb-4">Tutti gli utenti registrati vengono automaticamente inclusi. Puoi rimuoverli se necessario.</p>
           
-          {/* Add new user */}
-          <div className="mb-6 p-4 bg-gray-700/50 rounded-lg">
-            <h3 className="text-lg font-semibold text-gray-100 mb-3">Aggiungi Utente</h3>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={newCoppaPasteUser}
-                onChange={(e) => setNewCoppaPasteUser(e.target.value)}
-                placeholder="Nome utente..."
-                className="flex-1 px-3 py-2 bg-gray-600 text-gray-100 border border-gray-500 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                onKeyPress={(e) => e.key === 'Enter' && addCoppaPasteUser()}
-              />
-              <button
-                onClick={addCoppaPasteUser}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-              >
-                Aggiungi
-              </button>
-            </div>
-          </div>
-
           {/* Users list */}
           <div className="space-y-4">
             {coppaPasteUsers.map((user) => (
@@ -3736,7 +3767,14 @@ export default function VolleyballApp() {
                   
                   {/* User info */}
                   <div className="flex-shrink-0">
-                    <h3 className="font-semibold text-gray-100 text-lg">{user.name}</h3>
+                    <h3 className="font-semibold text-gray-100 text-lg flex items-center gap-2">
+                      {user.name}
+                      {!user.userExists && (
+                        <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">
+                          Utente eliminato
+                        </span>
+                      )}
+                    </h3>
                   </div>
 
                   {/* Ammonizioni */}
