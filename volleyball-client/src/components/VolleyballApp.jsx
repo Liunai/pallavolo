@@ -2070,92 +2070,56 @@ export default function VolleyballApp() {
       return a.name.localeCompare(b.name);
     });
 
-    // Column widths
-    const idxW = 3;
-    const nameW = 28;
-    const dateW = 12; // dd/mm/yyyy
-    const coppaW = 6;
-
-    const header = [
-      'N'.padEnd(idxW),
-      'NOME'.padEnd(nameW),
-      'AMM 1'.padEnd(dateW),
-      'AMM 2'.padEnd(dateW),
-      'AMM 3'.padEnd(dateW),
-      'ESPIAZ.'.padEnd(dateW),
-      'COPPA'.padStart(coppaW)
-    ].join(' │ ');
-
-    const separator = '-'.repeat(idxW) + '-┼-' + '-'.repeat(nameW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(coppaW);
-
     const reportLines = [
-      `🏐 REPORT COPPA PASTE - ${currentDate}`,
-      `${'═'.repeat(98)}`,
+      `🧁 COPPA PASTE - ${currentDate}`,
       ``,
-      header,
-      separator,
       ``
     ];
 
     sortedUsers.forEach((user, index) => {
       const ammonizioni = user.ammonizioni || [null, null, null];
-      const coppaPaste = (user.coppaPaste || 0).toString();
-      const espiato = user.debitoEspiato || '';
-
+      const coppaPaste = user.coppaPaste || 0;
+      const espiato = user.debitoEspiato;
+      
+      // Formato data semplice
       const fmtDate = (d) => {
-        if (!d) return '—'.padEnd(dateW);
+        if (!d) return null;
         try {
-          const dt = new Date(d);
-          return dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }).padEnd(dateW);
+          return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
         } catch (e) {
-          return String(d).padEnd(dateW);
+          return String(d);
         }
       };
 
-      const amm1 = fmtDate(ammonizioni[0]);
-      const amm2 = fmtDate(ammonizioni[1]);
-      const amm3 = fmtDate(ammonizioni[2]);
-      const espiatoFormatted = espiato ? fmtDate(espiato) : '—'.padEnd(dateW);
-
-      const idxStr = String(index + 1).padEnd(idxW);
-      const userName = (user.name || 'Utente').length > nameW ? (user.name || 'Utente').substring(0, nameW - 2) + '..' : (user.name || 'Utente');
-
-      reportLines.push([
-        idxStr,
-        userName.padEnd(nameW),
-        amm1,
-        amm2,
-        amm3,
-        espiatoFormatted,
-        coppaPaste.padStart(coppaW)
-      ].join(' │ '));
+      // Nome utente
+      reportLines.push(`${index + 1}. ${user.name || 'Utente'}`);
+      
+      // Punti coppa
+      if (coppaPaste > 0) {
+        reportLines.push(`   💰 Coppa Paste: ${coppaPaste} punti`);
+      }
+      
+      // Ammonizioni (solo quelle presenti)
+      const ammPresenti = ammonizioni.filter(a => a !== null);
+      if (ammPresenti.length > 0) {
+        const ammDates = ammPresenti.map(a => fmtDate(a)).join(', ');
+        reportLines.push(`   ⚠️ Ammonizioni (${ammPresenti.length}): ${ammDates}`);
+      }
+      
+      // Debito espiato
+      if (espiato) {
+        reportLines.push(`   ✅ Debito espiato: ${fmtDate(espiato)}`);
+      }
+      
+      // Se non ha niente, mostra OK
+      if (coppaPaste === 0 && ammPresenti.length === 0 && !espiato) {
+        reportLines.push(`   🟢 Situazione regolare`);
+      }
+      
+      reportLines.push(``); // Riga vuota tra utenti
     });
 
-    // Statistiche finali
-    const totalUsers = sortedUsers.length;
-    const usersWithAmm = sortedUsers.filter(u => (u.ammonizioni || []).some(a => a !== null)).length;
-    const usersWithDebt = sortedUsers.filter(u => (u.coppaPaste || 0) > 0).length;
-    const totalCoppaPaste = sortedUsers.reduce((sum, u) => sum + (u.coppaPaste || 0), 0);
-    const usersWithEspiato = sortedUsers.filter(u => u.debitoEspiato).length;
-
-    reportLines.push(
-      ``,
-      `${'═'.repeat(80)}`,
-      `📊 STATISTICHE RIASSUNTIVE:`,
-      ``,
-      `• Utenti totali: ${totalUsers}`,
-      `• Utenti con ammonizioni attive: ${usersWithAmm}`,
-      `• Utenti con punti coppa: ${usersWithDebt}`,
-      `• Utenti con debito espiato: ${usersWithEspiato}`,
-      `• Totale punti coppa: ${totalCoppaPaste}`,
-      ``,
-      `LEGENDA:`,
-      `• AMM 1/2/3: Date delle ammonizioni (gg/mm)`,
-      `• ESPIATO: Data espiazione debito (gg/mm)`,
-      `• COPPA: Punti coppa paste accumulati`,
-      ``,
-      `Generato il: ${new Date().toLocaleString('it-IT')} - Sistema Pallavolo 7 Fighters`
-    );
+    reportLines.push(`Generato: ${new Date().toLocaleString('it-IT')}`);
 
     return reportLines.join('\n');
   };
