@@ -19,6 +19,7 @@ import {
   getDocs,
   increment,
   limit,
+  Timestamp,
 } from 'firebase/firestore';
 
 const MAX_PARTICIPANTS = 14;
@@ -1784,6 +1785,10 @@ export default function VolleyballApp() {
         // Use explicit userId when present, otherwise fallback to the document id
         const key = data.userId || docSnap.id;
         existingCoppaPasteData[key] = { id: docSnap.id, ...data };
+        console.log('Dati coppa paste caricati per utente:', key, data);
+        if (data.storicoAmmonizioni) {
+          console.log('Storico trovato per', key, ':', data.storicoAmmonizioni);
+        }
       });
 
       // Sincronizza: crea dati coppa paste per utenti che non li hanno ancora
@@ -2042,6 +2047,43 @@ export default function VolleyballApp() {
       }
     } catch (error) {
       console.error('Errore nel recupero dello storico:', error);
+    }
+  };
+
+  // Funzione per creare dati di storico di test (solo per debug)
+  const createTestStorico = async (userId) => {
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      const now = new Date();
+      const testStorico = [
+        {
+          ciclo: 1,
+          amm1: Timestamp.fromDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)), // 30 giorni fa
+          amm2: Timestamp.fromDate(new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)), // 20 giorni fa
+          amm3: Timestamp.fromDate(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)), // 10 giorni fa
+          espiazione: Timestamp.fromDate(new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)), // 5 giorni fa
+          dataCreazione: Timestamp.fromDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
+        },
+        {
+          ciclo: 2,
+          amm1: Timestamp.fromDate(new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000)), // 4 giorni fa
+          amm2: Timestamp.fromDate(new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)), // 2 giorni fa
+          amm3: null,
+          espiazione: null,
+          dataCreazione: Timestamp.fromDate(new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000))
+        }
+      ];
+      
+      await updateDoc(userRef, {
+        storicoAmmonizioni: testStorico
+      });
+      
+      console.log('Storico di test creato per utente:', userId);
+      
+      // Ricarica i dati
+      showUserAmmonitionHistory(userId, selectedUserHistory.userName);
+    } catch (error) {
+      console.error('Errore nella creazione dello storico di test:', error);
     }
   };
 
@@ -5222,6 +5264,16 @@ export default function VolleyballApp() {
               </div>
               
               <div className="p-6 overflow-y-auto max-h-[70vh]">
+                {/* Debug: mostra sempre i dati attuali */}
+                <div className="mb-4 p-3 bg-gray-700 rounded-lg border border-gray-600">
+                  <h4 className="font-bold text-gray-100 mb-2">🔍 Debug - Dati Attuali Utente</h4>
+                  <div className="text-xs text-gray-400">
+                    <p>ID Utente: {selectedUserHistory.userId}</p>
+                    <p>Storico Array Length: {selectedUserHistory.storico ? selectedUserHistory.storico.length : 'undefined'}</p>
+                    <p>Storico Data: {JSON.stringify(selectedUserHistory.storico)}</p>
+                  </div>
+                </div>
+
                 {selectedUserHistory.storico && selectedUserHistory.storico.length > 0 ? (
                   <div className="space-y-4">
                     {selectedUserHistory.storico.map((ciclo, index) => (
@@ -5320,6 +5372,16 @@ export default function VolleyballApp() {
               </div>
               
               <div className="p-6 border-t border-gray-700">
+                {/* Pulsante per creare dati di test (solo per debug) */}
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => createTestStorico(selectedUserHistory.userId)}
+                    className="w-full mb-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition border border-yellow-500"
+                  >
+                    🧪 Crea Storico Test (Debug)
+                  </button>
+                )}
+                
                 <button
                   onClick={() => setShowUserHistory(false)}
                   className="w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
