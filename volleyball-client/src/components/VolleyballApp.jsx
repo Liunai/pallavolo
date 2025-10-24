@@ -2015,9 +2015,34 @@ export default function VolleyballApp() {
     }
   };
 
-  const showUserAmmonitionHistory = (user) => {
-    setSelectedUserHistory(user);
-    setShowUserHistory(true);
+  const showUserAmmonitionHistory = async (userId, userName) => {
+    console.log('Cercando storico per:', userId, userName);
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        console.log('Dati utente trovati:', userData);
+        console.log('Storico ammonizioni:', userData.storicoAmmonizioni);
+        setSelectedUserHistory({
+          userId: userId,
+          userName: userName,
+          storico: userData.storicoAmmonizioni || []
+        });
+        setShowUserHistory(true);
+      } else {
+        console.log('Nessun dato trovato per questo utente');
+        setSelectedUserHistory({
+          userId: userId,
+          userName: userName,
+          storico: []
+        });
+        setShowUserHistory(true);
+      }
+    } catch (error) {
+      console.error('Errore nel recupero dello storico:', error);
+    }
   };
 
   const updateCoppaPaste = async (userId, newValue) => {
@@ -3964,7 +3989,7 @@ export default function VolleyballApp() {
                           onClick={() => showUserAmmonitionHistory(user.id, user.customDisplayName || user.displayName)}
                           className="px-2 md:px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition"
                         >
-                          📋 Storico
+                          🧁 Storico
                         </button>
                       )}
                       
@@ -5283,8 +5308,13 @@ export default function VolleyballApp() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <div className="text-gray-400 text-lg">📋</div>
+                    <div className="text-gray-400 text-lg">🧁</div>
                     <p className="text-gray-400 mt-2">Nessuno storico di ammonizioni disponibile</p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      {selectedUserHistory.storico === undefined ? 
+                        'Caricamento dati in corso...' : 
+                        'Non ci sono ancora cicli di ammonizioni registrati per questo utente'}
+                    </p>
                   </div>
                 )}
               </div>
