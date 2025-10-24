@@ -2054,6 +2054,10 @@ export default function VolleyballApp() {
   const createTestStorico = async (userId) => {
     try {
       const userRef = doc(db, 'coppaPaste', userId);
+      
+      // Prima verifica se il documento esiste
+      const userDoc = await getDoc(userRef);
+      
       const now = new Date();
       const testStorico = [
         {
@@ -2074,14 +2078,29 @@ export default function VolleyballApp() {
         }
       ];
       
-      await updateDoc(userRef, {
-        storicoAmmonizioni: testStorico
-      });
-      
-      console.log('Storico di test creato per utente:', userId);
+      if (userDoc.exists()) {
+        // Se il documento esiste, aggiorna solo il campo storico
+        await updateDoc(userRef, {
+          storicoAmmonizioni: testStorico
+        });
+        console.log('Storico di test aggiunto a documento esistente per utente:', userId);
+      } else {
+        // Se il documento non esiste, crealo con dati base
+        const userData = allUsers.find(u => u.id === userId) || {};
+        await setDoc(userRef, {
+          userId: userId,
+          name: userData.customDisplayName || userData.displayName || 'Utente Test',
+          ammonizioni: [null, null, null],
+          coppaPaste: 0,
+          debitoEspiato: null,
+          storicoAmmonizioni: testStorico,
+          dataCreazione: serverTimestamp()
+        });
+        console.log('Nuovo documento creato con storico di test per utente:', userId);
+      }
       
       // Ricarica i dati
-      showUserAmmonitionHistory(userId, selectedUserHistory.userName);
+      await showUserAmmonitionHistory(userId, selectedUserHistory.userName);
     } catch (error) {
       console.error('Errore nella creazione dello storico di test:', error);
     }
