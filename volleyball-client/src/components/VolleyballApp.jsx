@@ -2061,7 +2061,7 @@ export default function VolleyballApp() {
 
   const generateCoppaPasteReport = () => {
     const currentDate = new Date().toLocaleDateString('it-IT');
-    
+
     // Ordina utenti per coppa paste (decrescente) e poi per nome
     const sortedUsers = [...coppaPasteUsers].sort((a, b) => {
       const coppaPasteA = a.coppaPaste || 0;
@@ -2070,29 +2070,65 @@ export default function VolleyballApp() {
       return a.name.localeCompare(b.name);
     });
 
+    // Column widths
+    const idxW = 3;
+    const nameW = 28;
+    const dateW = 12; // dd/mm/yyyy
+    const coppaW = 6;
+
+    const header = [
+      'N'.padEnd(idxW),
+      'NOME'.padEnd(nameW),
+      'AMM 1'.padEnd(dateW),
+      'AMM 2'.padEnd(dateW),
+      'AMM 3'.padEnd(dateW),
+      'ESPIAZ.'.padEnd(dateW),
+      'COPPA'.padStart(coppaW)
+    ].join(' │ ');
+
+    const separator = '-'.repeat(idxW) + '-┼-' + '-'.repeat(nameW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(dateW) + '-┼-' + '-'.repeat(coppaW);
+
     const reportLines = [
       `🏐 REPORT COPPA PASTE - ${currentDate}`,
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `${'═'.repeat(98)}`,
+      ``,
+      header,
+      separator,
       ``
     ];
 
     sortedUsers.forEach((user, index) => {
       const ammonizioni = user.ammonizioni || [null, null, null];
-      const ammCount = ammonizioni.filter(a => a !== null).length;
-      const coppaPaste = user.coppaPaste || 0;
-      const espiato = user.debitoEspiato ? '✅' : '';
-      
-      let status = '';
-      if (ammCount === 3) status = '🔴 3 AMM';
-      else if (ammCount === 2) status = '🟡 2 AMM';
-      else if (ammCount === 1) status = '🟠 1 AMM';
-      else status = '🟢 OK';
+      const coppaPaste = (user.coppaPaste || 0).toString();
+      const espiato = user.debitoEspiato || '';
 
-      reportLines.push(
-        `${(index + 1).toString().padStart(2)}. ${user.name}`,
-        `    Coppa: ${coppaPaste.toString().padStart(3)} punti | ${status} ${espiato}`,
-        ``
-      );
+      const fmtDate = (d) => {
+        if (!d) return '—'.padEnd(dateW);
+        try {
+          const dt = new Date(d);
+          return dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }).padEnd(dateW);
+        } catch (e) {
+          return String(d).padEnd(dateW);
+        }
+      };
+
+      const amm1 = fmtDate(ammonizioni[0]);
+      const amm2 = fmtDate(ammonizioni[1]);
+      const amm3 = fmtDate(ammonizioni[2]);
+      const espiatoFormatted = espiato ? fmtDate(espiato) : '—'.padEnd(dateW);
+
+      const idxStr = String(index + 1).padEnd(idxW);
+      const userName = (user.name || 'Utente').length > nameW ? (user.name || 'Utente').substring(0, nameW - 2) + '..' : (user.name || 'Utente');
+
+      reportLines.push([
+        idxStr,
+        userName.padEnd(nameW),
+        amm1,
+        amm2,
+        amm3,
+        espiatoFormatted,
+        coppaPaste.padStart(coppaW)
+      ].join(' │ '));
     });
 
     // Statistiche finali
@@ -2100,16 +2136,25 @@ export default function VolleyballApp() {
     const usersWithAmm = sortedUsers.filter(u => (u.ammonizioni || []).some(a => a !== null)).length;
     const usersWithDebt = sortedUsers.filter(u => (u.coppaPaste || 0) > 0).length;
     const totalCoppaPaste = sortedUsers.reduce((sum, u) => sum + (u.coppaPaste || 0), 0);
+    const usersWithEspiato = sortedUsers.filter(u => u.debitoEspiato).length;
 
     reportLines.push(
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `📊 STATISTICHE:`,
+      ``,
+      `${'═'.repeat(80)}`,
+      `📊 STATISTICHE RIASSUNTIVE:`,
+      ``,
       `• Utenti totali: ${totalUsers}`,
-      `• Con ammonizioni: ${usersWithAmm}`,
-      `• Con debiti: ${usersWithDebt}`,
+      `• Utenti con ammonizioni attive: ${usersWithAmm}`,
+      `• Utenti con punti coppa: ${usersWithDebt}`,
+      `• Utenti con debito espiato: ${usersWithEspiato}`,
       `• Totale punti coppa: ${totalCoppaPaste}`,
       ``,
-      `Generato: ${new Date().toLocaleString('it-IT')}`
+      `LEGENDA:`,
+      `• AMM 1/2/3: Date delle ammonizioni (gg/mm)`,
+      `• ESPIATO: Data espiazione debito (gg/mm)`,
+      `• COPPA: Punti coppa paste accumulati`,
+      ``,
+      `Generato il: ${new Date().toLocaleString('it-IT')} - Sistema Pallavolo 7 Fighters`
     );
 
     return reportLines.join('\n');
@@ -4085,6 +4130,7 @@ export default function VolleyballApp() {
 
                   {/* Elimina utente */}
                   <div className="lg:col-span-1">
+                    <div className="text-xs text-gray-400 mb-1 text-center">Elimina utente</div>
                     <button
                       onClick={() => deleteCoppaPasteUser(user.id, user.name)}
                       className="w-full px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
