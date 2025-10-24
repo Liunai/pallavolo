@@ -115,6 +115,8 @@ export default function VolleyballApp() {
   const [coppaPasteUsers, setCoppaPasteUsers] = useState([]);
   const [coppaPasteNewUser, setCoppaPasteNewUser] = useState('');
   const [showCoppaPasteReport, setShowCoppaPasteReport] = useState(false);
+  const [showUserHistory, setShowUserHistory] = useState(false);
+  const [selectedUserHistory, setSelectedUserHistory] = useState(null);
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -1880,16 +1882,9 @@ export default function VolleyballApp() {
       const newAmmonizioni = [...userData.ammonizioni];
       newAmmonizioni[ammonitionIndex] = lastMatchDate.toISOString().split('T')[0]; // formato YYYY-MM-DD
       
-      // Se è la terza ammonizione, incrementa coppa paste e resetta le ammonizioni
-      let newCoppaPaste = userData.coppaPaste || 0;
-      if (ammonitionIndex === 2) { // terza ammonizione (index 2)
-        newCoppaPaste += 1;
-        // Le ammonizioni rimangono visibili ma si può iniziare un nuovo ciclo
-      }
-      
+      // Non incrementiamo più la coppa paste qui - solo al momento dell'espiazione
       await updateDoc(userRef, {
-        ammonizioni: newAmmonizioni,
-        coppaPaste: newCoppaPaste
+        ammonizioni: newAmmonizioni
       });
       
       await loadCoppaPasteData();
@@ -1925,10 +1920,36 @@ export default function VolleyballApp() {
     try {
       const lastMatchDate = await getLastMatchDate();
       const userRef = doc(db, 'coppaPaste', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) return;
+      
+      const userData = userSnap.data();
+      const currentAmmonizioni = userData.ammonizioni || [null, null, null];
+      
+      // Controlla se ha 3 ammonizioni per assegnare il punto coppa
+      const ammCount = currentAmmonizioni.filter(a => a !== null).length;
+      let newCoppaPaste = userData.coppaPaste || 0;
+      if (ammCount === 3) {
+        newCoppaPaste += 1;
+      }
+      
+      // Salva lo storico delle ammonizioni prima di resettarle
+      const storico = userData.storicoAmmonizioni || [];
+      const nuovoCiclo = {
+        amm1: currentAmmonizioni[0],
+        amm2: currentAmmonizioni[1], 
+        amm3: currentAmmonizioni[2],
+        espiazione: lastMatchDate.toISOString().split('T')[0],
+        dataCreazione: serverTimestamp()
+      };
+      storico.push(nuovoCiclo);
       
       await updateDoc(userRef, {
         debitoEspiato: lastMatchDate.toISOString().split('T')[0],
-        ammonizioni: [null, null, null] // resetta tutte le ammonizioni
+        ammonizioni: [null, null, null], // resetta tutte le ammonizioni
+        coppaPaste: newCoppaPaste,
+        storicoAmmonizioni: storico
       });
       
       await loadCoppaPasteData();
@@ -1992,6 +2013,11 @@ export default function VolleyballApp() {
       console.error('Error removing debito espiato:', error);
       alert('Errore nella rimozione dell\'espiazione del debito');
     }
+  };
+
+  const showUserAmmonitionHistory = (user) => {
+    setSelectedUserHistory(user);
+    setShowUserHistory(true);
   };
 
   const updateCoppaPaste = async (userId, newValue) => {
@@ -3932,6 +3958,16 @@ export default function VolleyballApp() {
                         📊 Stats
                       </button>
                       
+                      {/* Storico ammonizioni button - available to all admins and capitana */}
+                      {(isAdmin || isCapitana) && (
+                        <button
+                          onClick={() => showUserAmmonitionHistory(user.id, user.customDisplayName || user.displayName)}
+                          className="px-2 md:px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition"
+                        >
+                          📋 Storico
+                        </button>
+                      )}
+                      
                       {/* Delete button - only for admins and not for super-admin or current user */}
                       {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
                         <button
@@ -5146,6 +5182,121 @@ export default function VolleyballApp() {
               >
                 Chiudi
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Storico Ammonizioni */}
+        {showUserHistory && selectedUserHistory && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-700">
+              <div className="p-6 border-b border-gray-700">
+                <h3 className="text-xl font-bold text-gray-100">
+                  📋 Storico Ammonizioni - {selectedUserHistory.userName}
+                </h3>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                {selectedUserHistory.storico && selectedUserHistory.storico.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedUserHistory.storico.map((ciclo, index) => (
+                      <div key={index} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-bold text-gray-100">Ciclo {ciclo.ciclo}</h4>
+                          <span className="text-sm text-gray-400">
+                            {ciclo.dataCreazione ? new Date(ciclo.dataCreazione.toDate()).toLocaleDateString('it-IT', { 
+                              day: '2-digit', 
+                              month: '2-digit', 
+                              year: 'numeric' 
+                            }) : 'N/A'}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                          {/* Prima ammonizione */}
+                          <div className="bg-gray-600 rounded p-3">
+                            <div className="text-sm font-medium text-gray-200">1ª Ammonizione</div>
+                            <div className="text-xs text-gray-400">
+                              {ciclo.amm1 ? new Date(ciclo.amm1.toDate()).toLocaleDateString('it-IT', { 
+                                day: '2-digit', 
+                                month: '2-digit', 
+                                year: 'numeric' 
+                              }) : '❌ Non presente'}
+                            </div>
+                          </div>
+                          
+                          {/* Seconda ammonizione */}
+                          <div className="bg-gray-600 rounded p-3">
+                            <div className="text-sm font-medium text-gray-200">2ª Ammonizione</div>
+                            <div className="text-xs text-gray-400">
+                              {ciclo.amm2 ? new Date(ciclo.amm2.toDate()).toLocaleDateString('it-IT', { 
+                                day: '2-digit', 
+                                month: '2-digit', 
+                                year: 'numeric' 
+                              }) : '❌ Non presente'}
+                            </div>
+                          </div>
+                          
+                          {/* Terza ammonizione */}
+                          <div className="bg-gray-600 rounded p-3">
+                            <div className="text-sm font-medium text-gray-200">3ª Ammonizione</div>
+                            <div className="text-xs text-gray-400">
+                              {ciclo.amm3 ? new Date(ciclo.amm3.toDate()).toLocaleDateString('it-IT', { 
+                                day: '2-digit', 
+                                month: '2-digit', 
+                                year: 'numeric' 
+                              }) : '❌ Non presente'}
+                            </div>
+                          </div>
+                          
+                          {/* Espiazione */}
+                          <div className="bg-gray-600 rounded p-3">
+                            <div className="text-sm font-medium text-gray-200">Debito Espiato</div>
+                            <div className="text-xs text-gray-400">
+                              {ciclo.espiazione ? new Date(ciclo.espiazione.toDate()).toLocaleDateString('it-IT', { 
+                                day: '2-digit', 
+                                month: '2-digit', 
+                                year: 'numeric' 
+                              }) : '❌ Non espiato'}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Status del ciclo */}
+                        <div className="mt-3 text-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            ciclo.espiazione 
+                              ? 'bg-green-900 text-green-200' 
+                              : (ciclo.amm1 && ciclo.amm2 && ciclo.amm3) 
+                                ? 'bg-red-900 text-red-200' 
+                                : 'bg-yellow-900 text-yellow-200'
+                          }`}>
+                            {ciclo.espiazione 
+                              ? '✅ Ciclo Completato' 
+                              : (ciclo.amm1 && ciclo.amm2 && ciclo.amm3) 
+                                ? '⚠️ In attesa espiazione' 
+                                : '🔄 Ciclo in corso'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-lg">📋</div>
+                    <p className="text-gray-400 mt-2">Nessuno storico di ammonizioni disponibile</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6 border-t border-gray-700">
+                <button
+                  onClick={() => setShowUserHistory(false)}
+                  className="w-full px-4 py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition border border-gray-600"
+                >
+                  Chiudi
+                </button>
+              </div>
             </div>
           </div>
         )}
