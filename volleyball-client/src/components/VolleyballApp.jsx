@@ -114,6 +114,7 @@ export default function VolleyballApp() {
   // Coppa Paste states
   const [coppaPasteUsers, setCoppaPasteUsers] = useState([]);
   const [coppaPasteNewUser, setCoppaPasteNewUser] = useState('');
+  const [showCoppaPasteReport, setShowCoppaPasteReport] = useState(false);
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -2058,6 +2059,83 @@ export default function VolleyballApp() {
     }
   };
 
+  const generateCoppaPasteReport = () => {
+    const currentDate = new Date().toLocaleDateString('it-IT');
+    
+    // Ordina utenti per coppa paste (decrescente) e poi per nome
+    const sortedUsers = [...coppaPasteUsers].sort((a, b) => {
+      const coppaPasteA = a.coppaPaste || 0;
+      const coppaPasteB = b.coppaPaste || 0;
+      if (coppaPasteB !== coppaPasteA) return coppaPasteB - coppaPasteA;
+      return a.name.localeCompare(b.name);
+    });
+
+    const reportLines = [
+      `🏐 REPORT COPPA PASTE - ${currentDate}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``
+    ];
+
+    sortedUsers.forEach((user, index) => {
+      const ammonizioni = user.ammonizioni || [null, null, null];
+      const ammCount = ammonizioni.filter(a => a !== null).length;
+      const coppaPaste = user.coppaPaste || 0;
+      const espiato = user.debitoEspiato ? '✅' : '';
+      
+      let status = '';
+      if (ammCount === 3) status = '🔴 3 AMM';
+      else if (ammCount === 2) status = '🟡 2 AMM';
+      else if (ammCount === 1) status = '🟠 1 AMM';
+      else status = '🟢 OK';
+
+      reportLines.push(
+        `${(index + 1).toString().padStart(2)}. ${user.name}`,
+        `    Coppa: ${coppaPaste.toString().padStart(3)} punti | ${status} ${espiato}`,
+        ``
+      );
+    });
+
+    // Statistiche finali
+    const totalUsers = sortedUsers.length;
+    const usersWithAmm = sortedUsers.filter(u => (u.ammonizioni || []).some(a => a !== null)).length;
+    const usersWithDebt = sortedUsers.filter(u => (u.coppaPaste || 0) > 0).length;
+    const totalCoppaPaste = sortedUsers.reduce((sum, u) => sum + (u.coppaPaste || 0), 0);
+
+    reportLines.push(
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📊 STATISTICHE:`,
+      `• Utenti totali: ${totalUsers}`,
+      `• Con ammonizioni: ${usersWithAmm}`,
+      `• Con debiti: ${usersWithDebt}`,
+      `• Totale punti coppa: ${totalCoppaPaste}`,
+      ``,
+      `Generato: ${new Date().toLocaleString('it-IT')}`
+    );
+
+    return reportLines.join('\n');
+  };
+
+  const shareOnWhatsApp = () => {
+    const reportText = generateCoppaPasteReport();
+    const encodedText = encodeURIComponent(reportText);
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+    
+    // Tenta di aprire WhatsApp
+    if (navigator.share && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      // Su dispositivi mobile, usa l'API di condivisione nativa se disponibile
+      navigator.share({
+        title: 'Report Coppa Paste',
+        text: reportText
+      }).catch((error) => {
+        // Fallback a WhatsApp Web
+        window.open(whatsappUrl, '_blank');
+      });
+    } else {
+      // Su desktop, apri WhatsApp Web
+      window.open(whatsappUrl, '_blank');
+    }
+  };
+
   // Function to mark session as ignored in statistics
   const handleIgnoreSession = async (sessionId) => {
     if (!isAdmin) return;
@@ -3860,8 +3938,20 @@ export default function VolleyballApp() {
     return (
       <div className="space-y-6">
         <div className="bg-gray-800 rounded-xl shadow-2xl p-4 md:p-6 border border-gray-700">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-6">Coppa Paste</h2>
-          <p className="text-gray-400 text-sm mb-4">Tutti gli utenti registrati vengono automaticamente inclusi. Puoi anche aggiungere utenti manualmente per nome.</p>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-2">Coppa Paste</h2>
+              <p className="text-gray-400 text-sm">Tutti gli utenti registrati vengono automaticamente inclusi. Puoi anche aggiungere utenti manualmente per nome.</p>
+            </div>
+            <div className="mt-4 md:mt-0">
+              <button
+                onClick={() => setShowCoppaPasteReport(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm"
+              >
+                📊 Genera Report
+              </button>
+            </div>
+          </div>
           
           {/* Add user form */}
           <div className="mb-6 p-4 bg-gray-700 rounded-lg border border-gray-600">
@@ -4015,6 +4105,50 @@ export default function VolleyballApp() {
             )}
           </div>
         </div>
+
+        {/* Report Modal */}
+        {showCoppaPasteReport && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden border border-gray-600">
+              <div className="flex items-center justify-between p-4 border-b border-gray-600">
+                <h3 className="text-lg font-bold text-gray-100">📊 Report Coppa Paste</h3>
+                <button
+                  onClick={() => setShowCoppaPasteReport(false)}
+                  className="text-gray-400 hover:text-gray-200 text-xl"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="p-4 overflow-y-auto max-h-[60vh]">
+                <pre className="text-sm text-gray-100 font-mono whitespace-pre-wrap bg-gray-900 p-4 rounded-lg border border-gray-600">
+                  {generateCoppaPasteReport()}
+                </pre>
+              </div>
+              
+              <div className="flex gap-3 p-4 border-t border-gray-600">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateCoppaPasteReport());
+                    alert('Report copiato negli appunti!');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                >
+                  📋 Copia Testo
+                </button>
+                <button
+                  onClick={() => {
+                    shareOnWhatsApp();
+                    setShowCoppaPasteReport(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                >
+                  📱 Condividi su WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
