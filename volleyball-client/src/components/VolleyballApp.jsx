@@ -2062,11 +2062,37 @@ export default function VolleyballApp() {
   const generateCoppaPasteReport = () => {
     const currentDate = new Date().toLocaleDateString('it-IT');
 
-    // Ordina utenti per coppa paste (decrescente) e poi per nome
+    // Ordinamento complesso: punti coppa paste (desc) → numero ammonizioni (desc) → data espiazione più vecchia (asc)
     const sortedUsers = [...coppaPasteUsers].sort((a, b) => {
       const coppaPasteA = a.coppaPaste || 0;
       const coppaPasteB = b.coppaPaste || 0;
-      if (coppaPasteB !== coppaPasteA) return coppaPasteB - coppaPasteA;
+      
+      // 1. Prima priorità: punti coppa paste (decrescente - chi ha più punti in cima)
+      if (coppaPasteB !== coppaPasteA) {
+        return coppaPasteB - coppaPasteA;
+      }
+      
+      // 2. Seconda priorità: numero di ammonizioni (decrescente - chi ha più ammonizioni in cima)
+      const ammA = (a.ammonizioni || []).filter(amm => amm !== null).length;
+      const ammB = (b.ammonizioni || []).filter(amm => amm !== null).length;
+      if (ammB !== ammA) {
+        return ammB - ammA;
+      }
+      
+      // 3. Terza priorità: data espiazione più vecchia (crescente - chi ha espiato prima in cima)
+      const espiatoA = a.debitoEspiato;
+      const espiatoB = b.debitoEspiato;
+      
+      // Se entrambi hanno espiato, ordina per data (più vecchia prima)
+      if (espiatoA && espiatoB) {
+        return new Date(espiatoA) - new Date(espiatoB);
+      }
+      
+      // Se solo uno ha espiato, quello va prima
+      if (espiatoA && !espiatoB) return -1;
+      if (!espiatoA && espiatoB) return 1;
+      
+      // 4. Ultima priorità: nome alfabetico
       return a.name.localeCompare(b.name);
     });
 
