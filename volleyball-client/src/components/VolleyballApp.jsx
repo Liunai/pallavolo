@@ -1937,6 +1937,62 @@ export default function VolleyballApp() {
     }
   };
 
+  const removeAmmonizione = async (userId, ammonitionIndex) => {
+    if (!confirm('Sei sicuro di voler rimuovere questa ammonizione?')) return;
+    
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) return;
+      
+      const userData = userSnap.data();
+      const newAmmonizioni = [...userData.ammonizioni];
+      newAmmonizioni[ammonitionIndex] = null;
+      
+      await updateDoc(userRef, {
+        ammonizioni: newAmmonizioni
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error removing ammonizione:', error);
+      alert('Errore nella rimozione dell\'ammonizione');
+    }
+  };
+
+  const updateDebitoEspiato = async (userId, newDate) => {
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      
+      await updateDoc(userRef, {
+        debitoEspiato: newDate
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error updating debito espiato:', error);
+      alert('Errore nell\'aggiornamento del debito espiato');
+    }
+  };
+
+  const removeDebitoEspiato = async (userId) => {
+    if (!confirm('Sei sicuro di voler rimuovere l\'espiazione del debito?')) return;
+    
+    try {
+      const userRef = doc(db, 'coppaPaste', userId);
+      
+      await updateDoc(userRef, {
+        debitoEspiato: null
+      });
+      
+      await loadCoppaPasteData();
+    } catch (error) {
+      console.error('Error removing debito espiato:', error);
+      alert('Errore nella rimozione dell\'espiazione del debito');
+    }
+  };
+
   const updateCoppaPaste = async (userId, newValue) => {
     try {
       const userRef = doc(db, 'coppaPaste', userId);
@@ -3829,55 +3885,56 @@ export default function VolleyballApp() {
           </div>
           
           {/* Users list */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {coppaPasteUsers.map((user) => (
-              <div key={user.id} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+              <div key={user.id} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
                 
-                {/* Header con nome utente */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-gray-100 text-lg">
-                      {user.name}
-                    </h3>
-                    {!user.userExists && (
-                      <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">
-                        Utente eliminato
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => deleteCoppaPasteUser(user.id, user.name)}
-                    className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
-                    title="Elimina utente"
-                  >
-                    🗑️ Elimina
-                  </button>
-                </div>
-
-                {/* Grid principale con contenuto organizzato */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                {/* Layout compatto in una singola riga */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                   
-                  {/* Sezione Ammonizioni - occupa spazio principale */}
-                  <div className="lg:col-span-7">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Ammonizioni</div>
-                    <div className="grid grid-cols-3 gap-3">
+                  {/* Nome utente */}
+                  <div className="lg:col-span-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-gray-100 text-sm truncate">
+                        {user.name}
+                      </h3>
+                      {!user.userExists && (
+                        <span className="text-xs bg-red-900 text-red-200 px-1 py-0.5 rounded">
+                          Eliminato
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ammonizioni compatte */}
+                  <div className="lg:col-span-6">
+                    <div className="grid grid-cols-3 gap-2">
                       {[0, 1, 2].map((index) => (
                         <div key={index} className="text-center">
-                          <div className="text-xs text-gray-400 mb-2 font-medium">#{index + 1}</div>
-                          <div className={`p-3 rounded-lg border-2 min-h-[70px] flex flex-col justify-center items-center transition-colors ${
+                          <div className="text-xs text-gray-400 mb-1">#{index + 1}</div>
+                          <div className={`p-2 rounded border min-h-[50px] flex flex-col justify-center items-center ${
                             hasThreeAmmonizioni(user.ammonizioni) && index === 2 
-                              ? 'bg-red-900/30 border-red-500/70' 
-                              : 'bg-gray-600/30 border-gray-500/50'
+                              ? 'bg-red-900/30 border-red-500' 
+                              : 'bg-gray-600/30 border-gray-500'
                           }`}>
                             {user.ammonizioni[index] ? (
-                              <input
-                                type="date"
-                                value={user.ammonizioni[index]}
-                                onChange={(e) => updateAmmonizione(user.id, index, e.target.value)}
-                                className="w-full text-xs bg-transparent border-none text-center text-gray-100 focus:outline-none"
-                              />
+                              <>
+                                <input
+                                  type="date"
+                                  value={user.ammonizioni[index]}
+                                  onChange={(e) => updateAmmonizione(user.id, index, e.target.value)}
+                                  className="w-full text-xs bg-transparent border-none text-center text-gray-100 focus:outline-none mb-1"
+                                />
+                                <button
+                                  onClick={() => removeAmmonizione(user.id, index)}
+                                  className="text-red-400 hover:text-red-300 text-xs"
+                                  title="Rimuovi ammonizione"
+                                >
+                                  ✕
+                                </button>
+                              </>
                             ) : (
-                              <span className="text-sm text-gray-500">—</span>
+                              <span className="text-xs text-gray-500">—</span>
                             )}
                           </div>
                           
@@ -3885,9 +3942,9 @@ export default function VolleyballApp() {
                           {(canAddAmmonizione(user.ammonizioni, index) || (canStartNewCycle(user.ammonizioni) && index === 0)) && (
                             <button
                               onClick={() => addAmmonizione(user.id, index)}
-                              className="mt-2 px-3 py-1 bg-red-600 text-white rounded-md text-xs hover:bg-red-700 transition font-medium"
+                              className="mt-1 px-2 py-0.5 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
                             >
-                              {canStartNewCycle(user.ammonizioni) && index === 0 ? 'Nuovo ciclo' : '+ Ammonizione'}
+                              {canStartNewCycle(user.ammonizioni) && index === 0 ? 'Nuovo' : '+'}
                             </button>
                           )}
                         </div>
@@ -3895,41 +3952,56 @@ export default function VolleyballApp() {
                     </div>
                   </div>
 
-                  {/* Sezione Debito Espiato */}
+                  {/* Debito Espiato compatto */}
                   <div className="lg:col-span-2">
-                    <div className="text-sm font-medium text-gray-300 mb-3 text-center">Debito Espiato</div>
-                    <div className="bg-gray-600/30 border-2 border-gray-500/50 rounded-lg p-3 min-h-[70px] flex items-center justify-center mb-2">
-                      {user.debitoEspiato ? (
-                        <div className="text-sm text-green-400 font-medium">{user.debitoEspiato}</div>
-                      ) : (
-                        <span className="text-sm text-gray-500">—</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setDebitoEspiato(user.id)}
-                      className="w-full px-3 py-1 bg-green-600 text-white rounded-md text-xs hover:bg-green-700 transition font-medium"
-                    >
-                      Segna Espiato
-                    </button>
+                    <div className="text-xs text-gray-400 mb-1 text-center">Debito Espiato</div>
+                    {user.debitoEspiato ? (
+                      <div className="space-y-1">
+                        <input
+                          type="date"
+                          value={user.debitoEspiato}
+                          onChange={(e) => updateDebitoEspiato(user.id, e.target.value)}
+                          className="w-full text-xs bg-gray-600 text-green-400 border border-gray-500 rounded text-center focus:ring-1 focus:ring-green-500"
+                        />
+                        <button
+                          onClick={() => removeDebitoEspiato(user.id)}
+                          className="w-full text-xs text-red-400 hover:text-red-300"
+                          title="Rimuovi espiazione"
+                        >
+                          ✕ Rimuovi
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDebitoEspiato(user.id)}
+                        className="w-full px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition"
+                      >
+                        Segna Espiato
+                      </button>
+                    )}
                   </div>
 
-                  {/* Sezione Coppa Paste */}
-                  <div className="lg:col-span-3">
-                    <div className="text-sm font-medium text-gray-300 mb-3 text-center">Valore Coppa Paste</div>
-                    <div className="flex items-center justify-center">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={user.coppaPaste || 0}
-                          onChange={(e) => updateCoppaPaste(user.id, e.target.value)}
-                          className="w-24 h-14 text-xl font-bold bg-gray-600/50 text-gray-100 border-2 border-gray-500/50 rounded-lg text-center focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                        />
-                        <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-400">
-                          punti
-                        </div>
-                      </div>
-                    </div>
+                  {/* Coppa Paste compatto */}
+                  <div className="lg:col-span-1">
+                    <div className="text-xs text-gray-400 mb-1 text-center">Coppa</div>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={user.coppaPaste || 0}
+                      onChange={(e) => updateCoppaPaste(user.id, e.target.value)}
+                      className="w-full h-8 text-sm font-semibold bg-gray-600 text-gray-100 border border-gray-500 rounded text-center focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {/* Elimina utente */}
+                  <div className="lg:col-span-1">
+                    <button
+                      onClick={() => deleteCoppaPasteUser(user.id, user.name)}
+                      className="w-full px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                      title="Elimina utente"
+                    >
+                      🗑️
+                    </button>
                   </div>
 
                 </div>
