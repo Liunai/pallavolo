@@ -2570,32 +2570,46 @@ export default function VolleyballApp() {
   };
 
   const handleAdminRemoveFriend = async (userUid, friendIndex, isReserve = false) => {
-    if (!isAdmin || !selectedMatch) return;
+    console.log('handleAdminRemoveFriend chiamata con:', { userUid, friendIndex, isReserve, isAdmin, selectedMatch: selectedMatch?.id });
+    
+    if (!isAdmin || !selectedMatch) {
+      console.log('Operazione bloccata:', { isAdmin, hasSelectedMatch: !!selectedMatch });
+      return;
+    }
     
     try {
+      console.log('Inizio rimozione amico...');
       const matchRef = doc(db, 'activeMatches', selectedMatch.id);
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(matchRef);
         const data = snap.data() || { participants: [], reserves: [] };
+        
+        console.log('Dati match caricati:', data);
         
         let newParticipants = [...(data.participants || [])];
         let newReserves = [...(data.reserves || [])];
         
         if (isReserve) {
           const userIndex = newReserves.findIndex((r) => r.uid === userUid);
+          console.log('Indice utente nelle riserve:', userIndex);
           if (userIndex !== -1 && newReserves[userIndex].friends) {
+            console.log('Amici prima della rimozione:', newReserves[userIndex].friends);
             newReserves[userIndex] = {
               ...newReserves[userIndex],
               friends: newReserves[userIndex].friends.filter((_, idx) => idx !== friendIndex)
             };
+            console.log('Amici dopo la rimozione:', newReserves[userIndex].friends);
           }
         } else {
           const userIndex = newParticipants.findIndex((p) => p.uid === userUid);
+          console.log('Indice utente nei partecipanti:', userIndex);
           if (userIndex !== -1 && newParticipants[userIndex].friends) {
+            console.log('Amici prima della rimozione:', newParticipants[userIndex].friends);
             newParticipants[userIndex] = {
               ...newParticipants[userIndex],
               friends: newParticipants[userIndex].friends.filter((_, idx) => idx !== friendIndex)
             };
+            console.log('Amici dopo la rimozione:', newParticipants[userIndex].friends);
           }
         }
         
@@ -2606,11 +2620,14 @@ export default function VolleyballApp() {
         });
       });
       
+      console.log('Rimozione amico completata con successo');
+      
       // Aggiorna le statistiche se è stato rimosso un amico dell'utente corrente
       if (currentUser && currentUser.uid === userUid) {
         await loadUserStats(currentUser.uid);
       }
     } catch (e) {
+      console.error('Errore durante la rimozione dell\'amico:', e);
       alert(e.message || 'Errore durante la rimozione dell\'amico');
     }
   };
