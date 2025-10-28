@@ -3586,7 +3586,7 @@ export default function VolleyballApp() {
                                     ✕
                                   </button>
                                   <button
-                                    onClick={() => promoteFromReserve(reserve.uid)}
+                                    onClick={() => handlePromoteReserve(reserve.uid)}
                                     className="text-green-400 hover:text-green-600 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
                                     title="Promuovi a partecipante"
                                   >
