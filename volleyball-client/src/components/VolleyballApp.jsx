@@ -74,7 +74,8 @@ export default function VolleyballApp() {
   
   // Wrapper per tracciare i cambi di vista
   const setCurrentView = (newView) => {
-    console.log('Cambio vista da', currentView, 'a', newView);
+    console.log('🔄 Cambio vista da', currentView, 'a', newView);
+    console.trace('Stack trace per il cambio vista:');
     setCurrentViewState(newView);
   };
   
@@ -281,13 +282,24 @@ export default function VolleyballApp() {
           setActiveMatches(matches);
           
           // Solo al primo caricamento, imposta la vista appropriata
-          if (isInitialLoad) {
+          // NON cambiare mai vista se l'utente è già in MATCH_DETAIL
+          if (isInitialLoad && currentView !== VIEW_STATES.MATCH_DETAIL) {
+            console.log('🔄 isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
             if (matches.length > 0) {
+              console.log('📋 Cambiando vista a MATCH_LIST per initial load');
               setCurrentView(VIEW_STATES.MATCH_LIST);
             } else {
+              console.log('❌ Cambiando vista a NO_MATCHES per initial load');
               setCurrentView(VIEW_STATES.NO_MATCHES);
             }
+            console.log('🏁 Impostando isInitialLoad=false');
             setIsInitialLoad(false); // Non sarà più il primo caricamento
+          } else {
+            console.log('🔄 onSnapshot aggiornamento NON-initial: isInitialLoad=', isInitialLoad, 'matches.length=', matches.length, 'currentView=', currentView);
+            // Se siamo in MATCH_DETAIL, NON cambiare vista anche se ora ci sono/non ci sono partite
+            if (currentView === VIEW_STATES.MATCH_DETAIL) {
+              console.log('🔒 Protezione MATCH_DETAIL: non cambio vista');
+            }
           }
           // Per i caricamenti successivi, non cambiare la vista per evitare che 
           // aggiornamenti realtime (es. iscrizioni) forzino la navigazione
