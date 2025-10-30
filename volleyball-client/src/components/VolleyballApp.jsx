@@ -4214,9 +4214,16 @@ export default function VolleyballApp() {
   };
 
   const renderUsersListView = () => {
+    // Ordina gli utenti alfabeticamente per nome (customDisplayName o displayName)
+    const sortedUsers = [...allUsers].sort((a, b) => {
+      const nameA = (a.customDisplayName || a.displayName || '').toLowerCase();
+      const nameB = (b.customDisplayName || b.displayName || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
     return (
       <div className="space-y-6">
-        {allUsers.length === 0 ? (
+        {sortedUsers.length === 0 ? (
           <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
             <p className="text-gray-400">Nessun utente registrato</p>
           </div>
@@ -4239,7 +4246,7 @@ export default function VolleyballApp() {
             </div>
             
             <div className="space-y-2">
-              {allUsers.map((user) => (
+              {sortedUsers.map((user) => (
                 <div key={user.id} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
                   <div className="flex items-center justify-between gap-3">
                     {/* User info - Left side */}
