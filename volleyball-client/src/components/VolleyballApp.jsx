@@ -70,7 +70,20 @@ export default function VolleyballApp() {
   const [isCreatingMatch, setIsCreatingMatch] = useState(false);
 
   // New state management for unified component
-  const [currentView, setCurrentView] = useState(VIEW_STATES.NO_MATCHES);
+  const [currentView, setCurrentViewState] = useState(VIEW_STATES.NO_MATCHES);
+  
+  // Wrapper per tracciare i cambi di vista
+  const setCurrentView = (newView) => {
+    console.log('Cambio vista da', currentView, 'a', newView);
+    setCurrentViewState(newView);
+  };
+  
+  // Funzione per mostrare toast non bloccante
+  const showToastMessage = (message) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000); // Nasconde dopo 3 secondi
+  };
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchHistory, setMatchHistory] = useState([]);
   const [activeMatches, setActiveMatches] = useState([]); // Lista di tutte le partite attive
@@ -118,6 +131,10 @@ export default function VolleyballApp() {
   const [showCoppaPasteReport, setShowCoppaPasteReport] = useState(false);
   const [showUserHistory, setShowUserHistory] = useState(false);
   const [selectedUserHistory, setSelectedUserHistory] = useState(null);
+  
+  // Toast notifications
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
   const isUser = userRole === 'user';
 
   // Listen to auth state
@@ -2442,7 +2459,7 @@ export default function VolleyballApp() {
           
           setFriends([]);
           await loadUserStats(currentUser.uid);
-          alert(`${friends.length} amici aggiunti alle riserve con successo!`);
+          showToastMessage(`${friends.length} amici aggiunti alle riserve con successo!`);
           return;
         }
 
@@ -5464,6 +5481,16 @@ export default function VolleyballApp() {
                   Chiudi
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notification */}
+        {showToast && (
+          <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 border border-green-500">
+            <div className="flex items-center gap-2">
+              <span className="text-green-200">✅</span>
+              <span>{toastMessage}</span>
             </div>
           </div>
         )}
