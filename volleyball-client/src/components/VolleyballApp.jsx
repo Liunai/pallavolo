@@ -288,15 +288,9 @@ export default function VolleyballApp() {
           setActiveMatches(matches);
           
           // Solo al primo caricamento, imposta la vista appropriata
-          // NON cambiare mai vista se l'utente è già in MATCH_DETAIL
-          // Inoltre NON cambiare vista durante l'initial load se l'utente
-          // sta attualmente aggiungendo amici (evita che il flow di inserimento
-          // forzi una navigazione imprevista)
-          if (
-            isInitialLoad &&
-            currentView !== VIEW_STATES.MATCH_DETAIL &&
-            (!friendsRef || friendsRef.current.length === 0)
-          ) {
+          // DISABILITATO: questa logica causava cambi di vista indesiderati
+          // quando l'utente stava interagendo con la UI (es. aggiungendo amici)
+          if (false && isInitialLoad && currentView !== VIEW_STATES.MATCH_DETAIL) {
             console.log('🔄 isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
             if (matches.length > 0) {
               console.log('📋 Cambiando vista a MATCH_LIST per initial load');
@@ -308,15 +302,11 @@ export default function VolleyballApp() {
             console.log('🏁 Impostando isInitialLoad=false');
             setIsInitialLoad(false); // Non sarà più il primo caricamento
           } else {
-            console.log('🔄 onSnapshot aggiornamento NON-initial: isInitialLoad=', isInitialLoad, 'matches.length=', matches.length, 'currentView=', currentView);
-            // Se l'initial load è in corso ma l'utente sta aggiungendo amici,
-            // saltiamo il cambio di vista per non interrompere l'input
-            if (isInitialLoad && friendsRef && friendsRef.current.length > 0) {
-              console.log('⏸️ Skipping initial-load view change because user is adding friends (friendsRef.length=', friendsRef.current.length, ')');
-            }
-            // Se siamo in MATCH_DETAIL, NON cambiare vista anche se ora ci sono/non ci sono partite
-            if (currentView === VIEW_STATES.MATCH_DETAIL) {
-              console.log('🔒 Protezione MATCH_DETAIL: non cambio vista');
+            console.log('🔄 onSnapshot aggiornamento: isInitialLoad=', isInitialLoad, 'matches.length=', matches.length, 'currentView=', currentView);
+            // Imposta isInitialLoad=false alla prima esecuzione per evitare interferenze future
+            if (isInitialLoad) {
+              console.log('🏁 Disabling isInitialLoad to prevent future automatic navigation');
+              setIsInitialLoad(false);
             }
           }
           // Per i caricamenti successivi, non cambiare la vista per evitare che 
