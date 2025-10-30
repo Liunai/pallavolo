@@ -2397,6 +2397,16 @@ export default function VolleyballApp() {
     return result;
   };
 
+  // Controlla se l'utente ha amici nella partita
+  const getUserFriendsInMatch = () => {
+    if (!selectedMatch || !currentUser) return [];
+    return selectedMatch.reserves?.filter(r => r.isFriend && r.friendOf === currentUser.uid) || [];
+  };
+
+  const hasUserFriendsInMatch = () => {
+    return getUserFriendsInMatch().length > 0;
+  };
+
   // Non permettere iscrizione se non esiste una partita selezionata
   // Distingue tra partite attive (si può iscrivere) e storiche (solo visualizzazione)
   const canSignup = !!selectedMatch && activeMatches.some(match => match.id === selectedMatch.id);
@@ -2561,9 +2571,6 @@ export default function VolleyballApp() {
         const newParticipants = [...(data.participants || [])];
         let newReserves = [...(data.reserves || [])];
 
-        // Rimuovi anche tutti gli amici associati a questo utente
-        newReserves = newReserves.filter(r => r.friendOf !== currentUser.uid);
-
         if (participantIndex !== undefined && participantIndex !== -1) {
           newParticipants.splice(participantIndex, 1);
           // Se rimuovo un partecipante e ci sono riserve NON-amici, promuovo la prima riserva
@@ -2587,6 +2594,42 @@ export default function VolleyballApp() {
       if (currentUser) await loadUserStats(currentUser.uid);
     } catch (e) {
       alert(e.message || 'Errore durante la disiscrizione');
+    }
+  };
+
+  // Rimuovi tutti i tuoi amici dalla partita
+  const handleRemoveMyFriends = async () => {
+    if (!isLoggedIn || !currentUser || !selectedMatch) return;
+    
+    const myFriends = selectedMatch.reserves?.filter(r => r.isFriend && r.friendOf === currentUser.uid) || [];
+    if (myFriends.length === 0) {
+      showToastMessage('Non hai amici da rimuovere in questa partita.');
+      return;
+    }
+
+    const confirmed = confirm(`Vuoi rimuovere tutti i tuoi ${myFriends.length} amici da questa partita?`);
+    if (!confirmed) return;
+
+    try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        // Rimuovi solo gli amici associati a questo utente
+        const newReserves = data.reserves?.filter(r => !(r.isFriend && r.friendOf === currentUser.uid)) || [];
+
+        transaction.update(matchRef, {
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+        });
+      });
+      
+      showToastMessage(`${myFriends.length} amici rimossi con successo!`);
+      await loadUserStats(currentUser.uid);
+    } catch (e) {
+      console.error('Errore durante la rimozione degli amici:', e);
+      showToastMessage('Errore durante la rimozione degli amici');
     }
   };
 
@@ -3490,6 +3533,28 @@ export default function VolleyballApp() {
               </button>
             )}
           </>
+        )}
+        
+        {/* Gestione amici già presenti nella partita */}
+        {canSignup && hasUserFriendsInMatch() && (
+          <div className="p-4 bg-blue-900/20 border border-blue-600 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-blue-300 text-sm font-medium">
+                  👥 Hai {getUserFriendsInMatch().length} amici in questa partita
+                </p>
+                <p className="text-blue-200 text-xs mt-1">
+                  {getUserFriendsInMatch().map(f => f.name).join(', ')}
+                </p>
+              </div>
+              <button
+                onClick={handleRemoveMyFriends}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium text-sm"
+              >
+                Rimuovi tutti
+              </button>
+            </div>
+          </div>
         )}
         
         {/* Liste partecipanti/set - sempre visibili */}
