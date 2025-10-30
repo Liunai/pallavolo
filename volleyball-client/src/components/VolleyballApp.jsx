@@ -4238,69 +4238,70 @@ export default function VolleyballApp() {
               )}
             </div>
             
-            <div className="space-y-3 md:space-y-4">
+            <div className="space-y-2">
               {allUsers.map((user) => (
-                <div key={user.id} className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
+                <div key={user.id} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
+                  <div className="flex items-center justify-between gap-3">
+                    {/* User info - Left side */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
                         src={user.photoURL || ''}
                         alt={user.displayName || ''}
-                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex-shrink-0 object-cover ${
+                        className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 flex-shrink-0 object-cover ${
                           user.email === SUPER_ADMIN_EMAIL || user.role === 'admin' 
-                            ? 'border-blue-500 shadow-lg shadow-blue-500/30' 
+                            ? 'border-blue-500 shadow-sm shadow-blue-500/30' 
                             : 'border-indigo-500'
                         }`}
                       />
-                      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 min-w-0 flex-1">
-                        <div className="min-w-0">
-                          <div className="font-medium text-gray-100 truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-gray-100 truncate text-sm md:text-base">
                             {user.customDisplayName || user.displayName}
                           </div>
-                        </div>
-                        
-                        {/* User statistics - inline for desktop, below for mobile */}
-                        <div className="flex gap-2 md:gap-3 text-xs">
-                          <div className="text-center">
-                            <div className="font-bold text-indigo-400">{user.stats?.totalSessions || 0}</div>
-                            <div className="text-gray-400">Partite giocate</div>
+                          
+                          {/* Role badge - compact */}
+                          {isAdmin && (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                              user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
+                              user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
+                              user.role === 'capitana' ? 'bg-purple-900 text-purple-200' :
+                              'bg-gray-600 text-gray-200'
+                            }`}>
+                              {user.email === SUPER_ADMIN_EMAIL ? 'ADM' : 
+                               user.role === 'admin' ? 'ADM' : 
+                               user.role === 'capitana' ? 'CAP' : 'USR'}
+                            </span>
+                          )}
+                          
+                          {/* Stats inline */}
+                          <div className="text-xs text-indigo-400 font-medium flex-shrink-0">
+                            {user.stats?.totalSessions || 0} partite
                           </div>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-                      {/* Role badge - show to all admins, but hide super admin role */}
-                      {isAdmin && (
-                        <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium ${
-                          user.email === SUPER_ADMIN_EMAIL ? 'bg-blue-900 text-blue-200' :
-                          user.role === 'admin' ? 'bg-blue-900 text-blue-200' :
-                          user.role === 'capitana' ? 'bg-purple-900 text-purple-200' :
-                          'bg-gray-600 text-gray-200'
-                        }`}>
-                          {user.email === SUPER_ADMIN_EMAIL ? 'Admin' : 
-                           user.role === 'admin' ? 'Admin' : 
-                           user.role === 'capitana' ? 'Capitana' : 'Utente'}
-                        </span>
-                      )}
-                      
-                      {/* Role change buttons - admins can promote to admin, only super-admin can assign all roles */}
+                    {/* Action buttons - Right side */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Role change buttons - compact */}
                       {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
-                        <div className="flex gap-1 md:gap-2 flex-wrap">
+                        <>
                           {user.role === 'user' && (
                             <>
                               <button
                                 onClick={() => handleChangeUserRole(user.id, 'admin')}
-                                className="px-2 md:px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition"
+                                title="Promuovi ad Admin"
                               >
-                                Admin
+                                ADM
                               </button>
                               {isSuperAdmin && (
                                 <button
                                   onClick={() => handleChangeUserRole(user.id, 'capitana')}
-                                  className="px-2 md:px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition"
+                                  className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 transition"
+                                  title="Promuovi a Capitana"
                                 >
-                                  Capitana
+                                  CAP
                                 </button>
                               )}
                             </>
@@ -4308,37 +4309,40 @@ export default function VolleyballApp() {
                           {(user.role === 'admin' || user.role === 'capitana') && isSuperAdmin && (
                             <button
                               onClick={() => handleChangeUserRole(user.id, 'user')}
-                              className="px-2 md:px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
+                              className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition"
+                              title="Riduci a Utente"
                             >
-                              Utente
+                              USR
                             </button>
                           )}
-                        </div>
+                        </>
                       )}
                       
-                      {/* Stats button - available to all admins */}
+                      {/* Stats button */}
                       <button
                         onClick={() => loadOtherUserStats(user.id, user.displayName)}
-                        className="px-2 md:px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                        className="px-2 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition"
+                        title="Visualizza statistiche"
                       >
-                        📊 Stats
+                        📊
                       </button>
                       
-                      {/* Storico ammonizioni button - available to all admins and capitana */}
+                      {/* Storico ammonizioni button */}
                       {(isAdmin || isCapitana) && (
                         <button
                           onClick={() => showUserAmmonitionHistory(user.id, user.customDisplayName || user.displayName)}
-                          className="px-2 md:px-3 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition"
+                          className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 transition"
+                          title="Storico ammonizioni"
                         >
-                          🧁 Storico
+                          🧁
                         </button>
                       )}
                       
-                      {/* Delete button - only for admins and not for super-admin or current user */}
+                      {/* Delete button */}
                       {isAdmin && user.email !== SUPER_ADMIN_EMAIL && user.id !== currentUser?.uid && (
                         <button
                           onClick={() => handleDeleteUser(user.id, user.customDisplayName || user.displayName)}
-                          className="px-2 md:px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
+                          className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition"
                           title="Elimina utente"
                         >
                           🗑️
