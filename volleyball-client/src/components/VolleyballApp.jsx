@@ -2450,18 +2450,8 @@ export default function VolleyballApp() {
         const alreadyParticipant = data.participants?.some((p) => p.uid === currentUser.uid);
         const alreadyReserve = data.reserves?.some((r) => r.uid === currentUser.uid);
         
-        // Se già iscritto come riserva, blocca completamente
-        if (alreadyReserve) {
-          throw new Error('Sei già iscritto come riserva!');
-        }
-        
-        // Se già partecipante, permetti solo aggiunta di amici
-        if (alreadyParticipant) {
-          if (friends.length === 0) {
-            throw new Error('Sei già iscritto come partecipante!');
-          }
-          
-          // Aggiungi gli amici direttamente nella lista riserve
+        // Se ci sono amici da aggiungere, gestiscili sempre
+        if (friends.length > 0) {
           const updated = { ...data };
           const friendEntries = friends.map(friendName => ({
             uid: `friend_${Date.now()}_${Math.random()}`, // UID temporaneo unico
@@ -2475,15 +2465,30 @@ export default function VolleyballApp() {
           
           updated.reserves = [...(updated.reserves || []), ...friendEntries];
           
-          transaction.update(matchRef, {
-            reserves: updated.reserves,
-            lastUpdated: serverTimestamp(),
-          });
+          // Se l'utente non vuole iscriversi ma solo aggiungere amici
+          if (alreadyParticipant || alreadyReserve) {
+            transaction.update(matchRef, {
+              reserves: updated.reserves,
+              lastUpdated: serverTimestamp(),
+            });
+            
+            setFriends([]);
+            await loadUserStats(currentUser.uid);
+            showToastMessage(`${friends.length} amici aggiunti alle riserve con successo!`);
+            return;
+          }
           
-          setFriends([]);
-          await loadUserStats(currentUser.uid);
-          showToastMessage(`${friends.length} amici aggiunti alle riserve con successo!`);
-          return;
+          // Se l'utente non è iscritto, continua con l'iscrizione + amici
+          data.reserves = updated.reserves;
+        }
+        
+        // Controlli per l'iscrizione dell'utente (solo se non è già iscritto)
+        if (alreadyReserve && friends.length === 0) {
+          throw new Error('Sei già iscritto come riserva!');
+        }
+        
+        if (alreadyParticipant && friends.length === 0) {
+          throw new Error('Sei già iscritto come partecipante!');
         }
 
         const newEntry = {
@@ -2493,23 +2498,9 @@ export default function VolleyballApp() {
           timestamp: new Date().toLocaleString('it-IT'),
         };
 
-        // Crea entry separate per gli amici (sempre nelle riserve)
-        const friendEntries = friends.map(friendName => ({
-          uid: `friend_${Date.now()}_${Math.random()}`, // UID temporaneo unico
-          name: friendName,
-          photoURL: null,
-          isFriend: true,
-          friendOf: currentUser.uid,
-          friendOfName: customDisplayName || currentUser.displayName,
-          timestamp: new Date().toLocaleString('it-IT'),
-        }));
-
         const updated = { ...data };
         updated.participants = Array.isArray(updated.participants) ? updated.participants : [];
         updated.reserves = Array.isArray(updated.reserves) ? updated.reserves : [];
-
-        // Aggiungi sempre gli amici alle riserve
-        updated.reserves = [...updated.reserves, ...friendEntries];
 
         if (asReserve) {
           updated.reserves = [...updated.reserves, newEntry];
