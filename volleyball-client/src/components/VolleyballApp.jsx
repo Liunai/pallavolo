@@ -3398,13 +3398,66 @@ export default function VolleyballApp() {
             )}
             
             {isUserReserve() && (
-              <div className="p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
-                <p className="text-amber-300 text-sm font-medium">
-                  ⏳ Sei iscritto come riserva
-                </p>
-                <p className="text-amber-200 text-xs mt-1">
-                  Non puoi aggiungere amici finché sei in lista riserve
-                </p>
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-900/20 border border-amber-600 rounded-lg">
+                  <p className="text-amber-300 text-sm font-medium">
+                    ⏳ Sei iscritto come riserva
+                  </p>
+                  <p className="text-amber-200 text-xs mt-1">
+                    Puoi comunque aggiungere amici alla tua iscrizione
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="text-xs text-gray-400 mb-2">* Puoi aggiungere fino a <span className="font-bold text-indigo-300">{isAdmin ? 'illimitati' : '3'} amici</span> per sessione</div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={friendInput || ''}
+                      onChange={e => setFriendInput(e.target.value)}
+                      className="px-4 py-2 rounded-lg bg-gray-700 text-gray-100 border border-gray-600 focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Nome amico"
+                      disabled={!isAdmin && friends.length >= 3}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (friendInput && (isAdmin || friends.length < 3)) {
+                          setFriends([...friends, friendInput]);
+                          setFriendInput('');
+                        }
+                      }}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                      disabled={!friendInput || (!isAdmin && friends.length >= 3)}
+                    >
+                      Aggiungi amico
+                    </button>
+                  </div>
+                  {friends.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-sm text-gray-300 mb-2">Amici da aggiungere:</div>
+                      <ul className="space-y-2">
+                        {friends.map((name, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span className="bg-indigo-900 text-indigo-100 px-3 py-1 rounded-full">{name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setFriends(friends.filter((_, i) => i !== idx))}
+                              className="text-red-400 hover:text-red-600 text-xs"
+                            >
+                              Rimuovi
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        onClick={() => handleSignup(false)}
+                        className="w-full mt-3 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                      >
+                        Aggiungi {friends.length} amici alla mia iscrizione
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
