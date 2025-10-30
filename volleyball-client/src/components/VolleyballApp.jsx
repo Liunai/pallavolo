@@ -2449,7 +2449,7 @@ export default function VolleyballApp() {
     return selectedMatch.reserves?.length || 0;
   };
 
-  const handleSignup = async (asReserve = false) => {
+  const handleSignup = async (asReserve = false, onlyFriends = false) => {
     if (!isLoggedIn || !currentUser || !selectedMatch) return;
 
     try {
@@ -2475,7 +2475,20 @@ export default function VolleyballApp() {
           
           updated.reserves = [...(updated.reserves || []), ...friendEntries];
           
-          // Se l'utente non vuole iscriversi ma solo aggiungere amici
+          // Se l'utente vuole aggiungere SOLO amici (senza iscriversi)
+          if (onlyFriends) {
+            transaction.update(matchRef, {
+              reserves: updated.reserves,
+              lastUpdated: serverTimestamp(),
+            });
+            
+            setFriends([]);
+            await loadUserStats(currentUser.uid);
+            showToastMessage(`${friends.length} amici aggiunti alle riserve con successo!`);
+            return;
+          }
+          
+          // Se l'utente è già iscritto ma vuole aggiungere amici
           if (alreadyParticipant || alreadyReserve) {
             transaction.update(matchRef, {
               reserves: updated.reserves,
@@ -2492,13 +2505,20 @@ export default function VolleyballApp() {
           data.reserves = updated.reserves;
         }
         
-        // Controlli per l'iscrizione dell'utente (solo se non è già iscritto)
-        if (alreadyReserve && friends.length === 0) {
-          throw new Error('Sei già iscritto come riserva!');
+        // Se onlyFriends è true ma non ci sono amici, errore
+        if (onlyFriends && friends.length === 0) {
+          throw new Error('Nessun amico da aggiungere!');
         }
         
-        if (alreadyParticipant && friends.length === 0) {
-          throw new Error('Sei già iscritto come partecipante!');
+        // Controlli per l'iscrizione dell'utente (solo se non è modalità onlyFriends)
+        if (!onlyFriends) {
+          if (alreadyReserve && friends.length === 0) {
+            throw new Error('Sei già iscritto come riserva!');
+          }
+          
+          if (alreadyParticipant && friends.length === 0) {
+            throw new Error('Sei già iscritto come partecipante!');
+          }
         }
 
         const newEntry = {
@@ -3405,16 +3425,10 @@ export default function VolleyballApp() {
                       </ul>
                       <div className="flex gap-3 mt-4">
                         <button
-                          onClick={() => handleSignup(false)}
-                          className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                          onClick={() => handleSignup(false, true)}
+                          className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
                         >
-                          Iscriviti come Partecipante + {friends.length} amici
-                        </button>
-                        <button
-                          onClick={() => handleSignup(true)}
-                          className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium"
-                        >
-                          Iscriviti come Riserva + {friends.length} amici
+                          Aggiungi solo {friends.length} amici
                         </button>
                       </div>
                     </div>
