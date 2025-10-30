@@ -2365,47 +2365,38 @@ export default function VolleyballApp() {
   const getTotalCount = () => {
     if (!selectedMatch) return 0;
     let total = selectedMatch.participants?.length || 0;
-    for (const p of (selectedMatch.participants || [])) total += (p.friends?.length || 0);
+    // Non più necessario contare friends separatamente - ora sono entry separate nelle riserve
     return total;
   };
 
   // Conta solo utenti registrati (senza amici)
   const getRegisteredUsersCount = () => {
     if (!selectedMatch) return 0;
-    return selectedMatch.participants?.length || 0;
+    return selectedMatch.participants?.filter(p => !p.isFriend).length || 0;
   };
 
-  // Conta solo amici dei partecipanti
+  // Conta solo amici dei partecipanti (ora non dovrebbero essercene nei partecipanti)
   const getFriendsCount = () => {
     if (!selectedMatch) return 0;
-    let friendsCount = 0;
-    for (const p of (selectedMatch.participants || [])) {
-      friendsCount += (p.friends?.length || 0);
-    }
-    return friendsCount;
+    return selectedMatch.participants?.filter(p => p.isFriend).length || 0;
   };
 
   // Conta solo utenti registrati nelle riserve (senza amici)
   const getRegisteredReservesCount = () => {
     if (!selectedMatch) return 0;
-    return selectedMatch.reserves?.length || 0;
+    return selectedMatch.reserves?.filter(r => !r.isFriend).length || 0;
   };
 
   // Conta solo amici delle riserve
   const getReservesFriendsCount = () => {
     if (!selectedMatch) return 0;
-    let friendsCount = 0;
-    for (const r of (selectedMatch.reserves || [])) {
-      friendsCount += (r.friends?.length || 0);
-    }
-    return friendsCount;
+    return selectedMatch.reserves?.filter(r => r.isFriend).length || 0;
   };
 
   const getReservesTotalCount = () => {
     if (!selectedMatch) return 0;
-    let total = selectedMatch.reserves?.length || 0;
-    for (const r of (selectedMatch.reserves || [])) total += (r.friends?.length || 0);
-    return total;
+    // Ora tutte le riserve sono entry separate (utenti + amici)
+    return selectedMatch.reserves?.length || 0;
   };
 
   const handleSignup = async (asReserve = false) => {
@@ -2430,23 +2421,28 @@ export default function VolleyballApp() {
             throw new Error('Sei già iscritto come partecipante!');
           }
           
-          // Gli amici non contano nel limite di 14, possono essere aggiunti liberamente
-          // Aggiorna l'iscrizione esistente con i nuovi amici
+          // Aggiungi gli amici direttamente nella lista riserve
           const updated = { ...data };
-          updated.participants = updated.participants.map(p => 
-            p.uid === currentUser.uid 
-              ? { ...p, friends: [...(p.friends || []), ...friends], timestamp: new Date().toLocaleString('it-IT') }
-              : p
-          );
+          const friendEntries = friends.map(friendName => ({
+            uid: `friend_${Date.now()}_${Math.random()}`, // UID temporaneo unico
+            name: friendName,
+            photoURL: null,
+            isFriend: true,
+            friendOf: currentUser.uid,
+            friendOfName: customDisplayName || currentUser.displayName,
+            timestamp: new Date().toLocaleString('it-IT'),
+          }));
+          
+          updated.reserves = [...(updated.reserves || []), ...friendEntries];
           
           transaction.update(matchRef, {
-            participants: updated.participants,
+            reserves: updated.reserves,
             lastUpdated: serverTimestamp(),
           });
           
           setFriends([]);
           await loadUserStats(currentUser.uid);
-          alert(`${friends.length} amici aggiunti con successo!`);
+          alert(`${friends.length} amici aggiunti alle riserve con successo!`);
           return;
         }
 
@@ -2454,13 +2450,26 @@ export default function VolleyballApp() {
           uid: currentUser.uid,
           name: customDisplayName || currentUser.displayName,
           photoURL: currentUser.photoURL,
-          friends,
           timestamp: new Date().toLocaleString('it-IT'),
         };
+
+        // Crea entry separate per gli amici (sempre nelle riserve)
+        const friendEntries = friends.map(friendName => ({
+          uid: `friend_${Date.now()}_${Math.random()}`, // UID temporaneo unico
+          name: friendName,
+          photoURL: null,
+          isFriend: true,
+          friendOf: currentUser.uid,
+          friendOfName: customDisplayName || currentUser.displayName,
+          timestamp: new Date().toLocaleString('it-IT'),
+        }));
 
         const updated = { ...data };
         updated.participants = Array.isArray(updated.participants) ? updated.participants : [];
         updated.reserves = Array.isArray(updated.reserves) ? updated.reserves : [];
+
+        // Aggiungi sempre gli amici alle riserve
+        updated.reserves = [...updated.reserves, ...friendEntries];
 
         if (asReserve) {
           updated.reserves = [...updated.reserves, newEntry];
@@ -3443,28 +3452,6 @@ export default function VolleyballApp() {
                             )}
                           </div>
                         </div>
-                        {participant.friends?.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {participant.friends.map((friend, fIndex) => (
-                              <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-green-400">+</span>
-                                  <span>{friend}</span>
-                                  <span className="text-xs text-gray-500">(Amico di {participant.name})</span>
-                                </div>
-                                {isAdmin && !isHistoricalMatch && (
-                                  <button
-                                    onClick={() => handleAdminRemoveFriend(participant.uid, fIndex, false)}
-                                    className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
-                                    title="Rimuovi amico"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -3595,13 +3582,19 @@ export default function VolleyballApp() {
                   <p className="text-gray-500 text-center py-4">Nessuna riserva</p>
                 ) : (
                   selectedMatch.reserves.map((reserve, index) => (
-                    <div key={reserve.uid + '_' + index} className="bg-amber-900 rounded-lg p-3 border border-amber-700">
+                    <div key={reserve.uid + '_' + index} className={`rounded-lg p-3 border ${
+                      reserve.isFriend 
+                        ? 'bg-blue-900 border-blue-700' 
+                        : 'bg-amber-900 border-amber-700'
+                    }`}>
                       <div className="flex items-center gap-3">
                         {reserve.photoURL ? (
                           <img
                             src={reserve.photoURL}
                             alt={reserve.name}
-                            className="w-10 h-10 rounded-full border-2 border-amber-500"
+                            className={`w-10 h-10 rounded-full border-2 ${
+                              reserve.isFriend ? 'border-blue-500' : 'border-amber-500'
+                            }`}
                             onError={(e) => {
                               e.target.style.display = 'none';
                               e.target.nextSibling.style.display = 'flex';
@@ -3609,66 +3602,61 @@ export default function VolleyballApp() {
                           />
                         ) : null}
                         <div 
-                          className={`w-10 h-10 rounded-full border-2 border-amber-500 bg-amber-700 flex items-center justify-center text-white font-bold ${reserve.photoURL ? 'hidden' : 'flex'}`}
+                          className={`w-10 h-10 rounded-full border-2 flex items-center justify-center text-white font-bold ${
+                            reserve.photoURL ? 'hidden' : 'flex'
+                          } ${
+                            reserve.isFriend 
+                              ? 'border-blue-500 bg-blue-700' 
+                              : 'border-amber-500 bg-amber-700'
+                          }`}
                         >
-                          👤
+                          {reserve.isFriend ? '👥' : '👤'}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-100">
-                              {index + 1}. {reserve.name}
-                            </span>
+                            <div>
+                              <span className="font-medium text-gray-100">
+                                {index + 1}. {reserve.name}
+                              </span>
+                              {reserve.isFriend && (
+                                <span className="text-xs text-gray-400 ml-2">
+                                  (Amico di {reserve.friendOfName})
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-400">{reserve.timestamp}</span>
-                              <button
-                                onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
-                                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
-                                title="Visualizza statistiche"
-                              >
-                                📊
-                              </button>
+                              {!reserve.isFriend && (
+                                <button
+                                  onClick={() => loadOtherUserStats(reserve.uid, reserve.name)}
+                                  className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                  title="Visualizza statistiche"
+                                >
+                                  📊
+                                </button>
+                              )}
                               {isAdmin && (
                                 <>
                                   <button
                                     onClick={() => handleAdminRemoveUser(reserve.uid, true)}
                                     className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                    title="Rimuovi utente"
+                                    title={reserve.isFriend ? "Rimuovi amico" : "Rimuovi utente"}
                                   >
                                     ✕
                                   </button>
-                                  <button
-                                    onClick={() => handlePromoteReserve(reserve.uid)}
-                                    className="text-green-400 hover:text-green-600 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
-                                    title="Promuovi a partecipante"
-                                  >
-                                    ↑
-                                  </button>
+                                  {!reserve.isFriend && (
+                                    <button
+                                      onClick={() => handlePromoteReserve(reserve.uid)}
+                                      className="text-green-400 hover:text-green-600 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                      title="Promuovi a partecipante"
+                                    >
+                                      ↑
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </div>
                           </div>
-                          {reserve.friends?.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {reserve.friends.map((friend, fIndex) => (
-                                <div key={fIndex} className="text-sm text-gray-300 flex items-center gap-2 justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-amber-400">+</span>
-                                    <span>{friend}</span>
-                                    <span className="text-xs text-gray-500">(Amico di {reserve.name})</span>
-                                  </div>
-                                  {isAdmin && (
-                                    <button
-                                      onClick={() => handleAdminRemoveFriend(reserve.uid, fIndex, true)}
-                                      className="text-red-400 hover:text-red-600 text-xs px-1 py-0.5 rounded bg-red-900/30 hover:bg-red-900/50 transition ml-2"
-                                      title="Rimuovi amico"
-                                    >
-                                      ✕
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
