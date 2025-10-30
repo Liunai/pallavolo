@@ -2561,12 +2561,16 @@ export default function VolleyballApp() {
         const newParticipants = [...(data.participants || [])];
         let newReserves = [...(data.reserves || [])];
 
+        // Rimuovi anche tutti gli amici associati a questo utente
+        newReserves = newReserves.filter(r => r.friendOf !== currentUser.uid);
+
         if (participantIndex !== undefined && participantIndex !== -1) {
           newParticipants.splice(participantIndex, 1);
-          // Se rimuovo un partecipante e ci sono riserve, promuovo la prima riserva
-          if (newReserves.length > 0) {
-            const firstReserve = newReserves[0];
-            newReserves = newReserves.slice(1);
+          // Se rimuovo un partecipante e ci sono riserve NON-amici, promuovo la prima riserva
+          const nonFriendReserves = newReserves.filter(r => !r.isFriend);
+          if (nonFriendReserves.length > 0) {
+            const firstReserve = nonFriendReserves[0];
+            newReserves = newReserves.filter(r => r.uid !== firstReserve.uid);
             newParticipants.push(firstReserve);
           }
         } else if (reserveIndex !== undefined && reserveIndex !== -1) {
@@ -3311,7 +3315,7 @@ export default function VolleyballApp() {
                   </div>
                   {friends.length > 0 && (
                     <div className="mt-2">
-                      <div className="text-sm text-gray-300 mb-2">Amici aggiunti:</div>
+                      <div className="text-sm text-gray-300 mb-2">Amici da aggiungere:</div>
                       <ul className="space-y-2">
                         {friends.map((name, idx) => (
                           <li key={idx} className="flex items-center gap-2">
@@ -3326,6 +3330,20 @@ export default function VolleyballApp() {
                           </li>
                         ))}
                       </ul>
+                      <div className="flex gap-3 mt-4">
+                        <button
+                          onClick={() => handleSignup(false)}
+                          className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                        >
+                          Iscriviti come Partecipante + {friends.length} amici
+                        </button>
+                        <button
+                          onClick={() => handleSignup(true)}
+                          className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium"
+                        >
+                          Iscriviti come Riserva + {friends.length} amici
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
