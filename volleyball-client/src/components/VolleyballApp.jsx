@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Users, UserPlus, Clock, Calendar, ChevronLeft, Home, History, UserCheck, Settings, Plus, Sun, Moon } from 'lucide-react';
 import { auth, db, provider } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
@@ -48,6 +48,12 @@ export default function VolleyballApp() {
   const [sessionDate, setSessionDate] = useState(null);
   const [friends, setFriends] = useState([]);
   const [friendInput, setFriendInput] = useState("");
+  // Ref per tracciare se l'utente sta interagendo con la lista amici
+  const friendsRef = useRef([]);
+
+  useEffect(() => {
+    friendsRef.current = friends;
+  }, [friends]);
   const [showStats, setShowStats] = useState(false);
   const [userStats, setUserStats] = useState(null);
   
@@ -283,7 +289,14 @@ export default function VolleyballApp() {
           
           // Solo al primo caricamento, imposta la vista appropriata
           // NON cambiare mai vista se l'utente è già in MATCH_DETAIL
-          if (isInitialLoad && currentView !== VIEW_STATES.MATCH_DETAIL) {
+          // Inoltre NON cambiare vista durante l'initial load se l'utente
+          // sta attualmente aggiungendo amici (evita che il flow di inserimento
+          // forzi una navigazione imprevista)
+          if (
+            isInitialLoad &&
+            currentView !== VIEW_STATES.MATCH_DETAIL &&
+            (!friendsRef || friendsRef.current.length === 0)
+          ) {
             console.log('🔄 isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
             if (matches.length > 0) {
               console.log('📋 Cambiando vista a MATCH_LIST per initial load');
@@ -296,6 +309,11 @@ export default function VolleyballApp() {
             setIsInitialLoad(false); // Non sarà più il primo caricamento
           } else {
             console.log('🔄 onSnapshot aggiornamento NON-initial: isInitialLoad=', isInitialLoad, 'matches.length=', matches.length, 'currentView=', currentView);
+            // Se l'initial load è in corso ma l'utente sta aggiungendo amici,
+            // saltiamo il cambio di vista per non interrompere l'input
+            if (isInitialLoad && friendsRef && friendsRef.current.length > 0) {
+              console.log('⏸️ Skipping initial-load view change because user is adding friends (friendsRef.length=', friendsRef.current.length, ')');
+            }
             // Se siamo in MATCH_DETAIL, NON cambiare vista anche se ora ci sono/non ci sono partite
             if (currentView === VIEW_STATES.MATCH_DETAIL) {
               console.log('🔒 Protezione MATCH_DETAIL: non cambio vista');
