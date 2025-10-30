@@ -2597,6 +2597,36 @@ export default function VolleyballApp() {
     }
   };
 
+  // Rimuovi un singolo amico dalla partita
+  const handleRemoveSingleFriend = async (friendUid, friendName) => {
+    if (!isLoggedIn || !currentUser || !selectedMatch) return;
+
+    const confirmed = confirm(`Vuoi rimuovere ${friendName} da questa partita?`);
+    if (!confirmed) return;
+
+    try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        // Rimuovi solo l'amico specifico
+        const newReserves = data.reserves?.filter(r => r.uid !== friendUid) || [];
+
+        transaction.update(matchRef, {
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+        });
+      });
+      
+      showToastMessage(`${friendName} rimosso con successo!`);
+      await loadUserStats(currentUser.uid);
+    } catch (e) {
+      console.error('Errore durante la rimozione dell\'amico:', e);
+      showToastMessage('Errore durante la rimozione dell\'amico');
+    }
+  };
+
   // Rimuovi tutti i tuoi amici dalla partita
   const handleRemoveMyFriends = async () => {
     if (!isLoggedIn || !currentUser || !selectedMatch) return;
@@ -3538,21 +3568,34 @@ export default function VolleyballApp() {
         {/* Gestione amici già presenti nella partita */}
         {canSignup && hasUserFriendsInMatch() && (
           <div className="p-4 bg-blue-900/20 border border-blue-600 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-blue-300 text-sm font-medium">
-                  👥 Hai {getUserFriendsInMatch().length} amici in questa partita
-                </p>
-                <p className="text-blue-200 text-xs mt-1">
-                  {getUserFriendsInMatch().map(f => f.name).join(', ')}
-                </p>
+            <p className="text-blue-300 text-sm font-medium mb-3">
+              👥 I tuoi amici in questa partita ({getUserFriendsInMatch().length})
+            </p>
+            <div className="space-y-2">
+              {getUserFriendsInMatch().map((friend) => (
+                <div key={friend.uid} className="flex items-center justify-between bg-blue-800/30 p-3 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-blue-100 font-medium">{friend.name}</span>
+                    <span className="text-blue-300 text-xs">
+                      (aggiunto {friend.timestamp})
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveSingleFriend(friend.uid, friend.name)}
+                    className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition font-medium text-sm"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-blue-600/30">
+                <button
+                  onClick={handleRemoveMyFriends}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium text-sm"
+                >
+                  Rimuovi tutti i {getUserFriendsInMatch().length} amici
+                </button>
               </div>
-              <button
-                onClick={handleRemoveMyFriends}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium text-sm"
-              >
-                Rimuovi tutti
-              </button>
             </div>
           </div>
         )}
