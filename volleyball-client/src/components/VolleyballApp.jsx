@@ -2369,6 +2369,38 @@ export default function VolleyballApp() {
     return total;
   };
 
+  // Conta solo utenti registrati (senza amici)
+  const getRegisteredUsersCount = () => {
+    if (!selectedMatch) return 0;
+    return selectedMatch.participants?.length || 0;
+  };
+
+  // Conta solo amici dei partecipanti
+  const getFriendsCount = () => {
+    if (!selectedMatch) return 0;
+    let friendsCount = 0;
+    for (const p of (selectedMatch.participants || [])) {
+      friendsCount += (p.friends?.length || 0);
+    }
+    return friendsCount;
+  };
+
+  // Conta solo utenti registrati nelle riserve (senza amici)
+  const getRegisteredReservesCount = () => {
+    if (!selectedMatch) return 0;
+    return selectedMatch.reserves?.length || 0;
+  };
+
+  // Conta solo amici delle riserve
+  const getReservesFriendsCount = () => {
+    if (!selectedMatch) return 0;
+    let friendsCount = 0;
+    for (const r of (selectedMatch.reserves || [])) {
+      friendsCount += (r.friends?.length || 0);
+    }
+    return friendsCount;
+  };
+
   const getReservesTotalCount = () => {
     if (!selectedMatch) return 0;
     let total = selectedMatch.reserves?.length || 0;
@@ -2398,17 +2430,7 @@ export default function VolleyballApp() {
             throw new Error('Sei già iscritto come partecipante!');
           }
           
-          // Calcola se c'è spazio per i nuovi amici
-          let currentTotal = data.participants.length;
-          for (const p of data.participants) {
-            currentTotal += (p.friends?.length || 0);
-          }
-          
-          const newTotal = currentTotal + friends.length;
-          if (newTotal > MAX_PARTICIPANTS) {
-            throw new Error(`Non ci sono abbastanza posti per tutti i +1, rimuoverne qualcuno e riprovare (posti disponibili: ${MAX_PARTICIPANTS - currentTotal})`);
-          }
-          
+          // Gli amici non contano nel limite di 14, possono essere aggiunti liberamente
           // Aggiorna l'iscrizione esistente con i nuovi amici
           const updated = { ...data };
           updated.participants = updated.participants.map(p => 
@@ -2443,21 +2465,17 @@ export default function VolleyballApp() {
         if (asReserve) {
           updated.reserves = [...updated.reserves, newEntry];
         } else {
-          // Calcola il totale attuale di partecipanti + amici
-          let currentTotal = updated.participants.length;
-          for (const p of updated.participants) {
-            currentTotal += (p.friends?.length || 0);
-          }
+          // Calcola il totale attuale di SOLO utenti registrati (non amici)
+          let currentRegisteredUsers = updated.participants.length;
           
-          // Calcola il totale che avremmo aggiungendo questo nuovo partecipante
-          const newTotal = currentTotal + 1 + (friends.length || 0);
-          
-          if (newTotal <= MAX_PARTICIPANTS) {
-            updated.participants = [...updated.participants, newEntry];
+          // Il limite di 14 si applica solo agli utenti registrati
+          if (currentRegisteredUsers >= MAX_PARTICIPANTS) {
+            // Se la lista degli utenti registrati è piena, va in riserva automaticamente
+            updated.reserves = [...updated.reserves, newEntry];
+            asReserve = true; // Flag per notifica
           } else {
-            // Blocca l'iscrizione con messaggio di errore invece di mettere in riserva
-            const availableSpots = MAX_PARTICIPANTS - currentTotal;
-            throw new Error(`Non ci sono abbastanza posti per tutti i +1, rimuoverne qualcuno e riprovare (posti disponibili: ${availableSpots})`);
+            // C'è spazio per l'utente registrato, lo aggiungiamo ai partecipanti
+            updated.participants = [...updated.participants, newEntry];
           }
         }
 
@@ -2715,15 +2733,11 @@ export default function VolleyballApp() {
         
         const reserveToPromote = data.reserves[reserveIndex];
         
-        // Calcola se c'è spazio nei partecipanti
-        let currentTotal = data.participants?.length || 0;
-        for (const p of (data.participants || [])) {
-          currentTotal += (p.friends?.length || 0);
-        }
-        const newTotal = currentTotal + 1 + (reserveToPromote.friends?.length || 0);
+        // Calcola se c'è spazio nei partecipanti (conta solo utenti registrati)
+        let currentRegisteredUsers = data.participants?.length || 0;
         
-        if (newTotal > MAX_PARTICIPANTS) {
-          throw new Error(`Non c'è abbastanza spazio. Servono ${newTotal - currentTotal} posti ma ne rimangono solo ${MAX_PARTICIPANTS - currentTotal}.`);
+        if (currentRegisteredUsers >= MAX_PARTICIPANTS) {
+          throw new Error(`Lista partecipanti piena (${MAX_PARTICIPANTS} utenti registrati). Non è possibile promuovere la riserva.`);
         }
         
         // Rimuovi dalle riserve e aggiungi ai partecipanti
@@ -2784,6 +2798,27 @@ export default function VolleyballApp() {
                 }`}>
                   {selectedMatch && activeMatches.some(match => match.id === selectedMatch.id) ? 'Aperta' : 'Giocata'}
                 </span>
+                {/* Riepilogo partecipanti separato */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-green-700 text-green-100 px-2 py-1 rounded">
+                    {getRegisteredUsersCount()} partecipanti
+                  </span>
+                  {getFriendsCount() > 0 && (
+                    <span className="bg-blue-700 text-blue-100 px-2 py-1 rounded">
+                      {getFriendsCount()} amici
+                    </span>
+                  )}
+                  {getRegisteredReservesCount() > 0 && (
+                    <span className="bg-amber-700 text-amber-100 px-2 py-1 rounded">
+                      {getRegisteredReservesCount()} riserve
+                    </span>
+                  )}
+                  {getReservesFriendsCount() > 0 && (
+                    <span className="bg-purple-700 text-purple-100 px-2 py-1 rounded">
+                      {getReservesFriendsCount()} amici riserve
+                    </span>
+                  )}
+                </div>
               </div>
             ) : currentView === VIEW_STATES.MATCH_HISTORY ? (
               <div className="mt-1 md:mt-2 text-sm md:text-lg text-indigo-300 font-semibold">Partite già giocate</div>
@@ -3351,9 +3386,16 @@ export default function VolleyballApp() {
           <div className="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-100">Partecipanti</h2>
-              <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
-                {getTotalCount()} / {MAX_PARTICIPANTS}
-              </span>
+              <div className="flex flex-col items-end gap-1">
+                <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full font-semibold text-sm border border-green-700">
+                  {getRegisteredUsersCount()} / {MAX_PARTICIPANTS}
+                </span>
+                {getFriendsCount() > 0 && (
+                  <span className="bg-blue-900 text-blue-200 px-2 py-0.5 rounded-full text-xs border border-blue-700">
+                    +{getFriendsCount()} amici
+                  </span>
+                )}
+              </div>
             </div>
             <div className="space-y-3">
               {!selectedMatch || !selectedMatch.participants || selectedMatch.participants.length === 0 ? (
@@ -3439,13 +3481,22 @@ export default function VolleyballApp() {
               <h2 className="text-xl font-bold text-gray-100">
                 {isHistoricalMatch ? 'Set' : 'Riserve'}
               </h2>
-              <span className={`px-3 py-1 rounded-full font-semibold text-sm border ${
-                isHistoricalMatch 
-                  ? 'bg-purple-900 text-purple-200 border-purple-700' 
-                  : 'bg-amber-900 text-amber-200 border-amber-700'
-              }`}>
-                {isHistoricalMatch ? matchSets.length : getReservesTotalCount()}
-              </span>
+              {isHistoricalMatch ? (
+                <span className="bg-purple-900 text-purple-200 px-3 py-1 rounded-full font-semibold text-sm border border-purple-700">
+                  {matchSets.length}
+                </span>
+              ) : (
+                <div className="flex flex-col items-end gap-1">
+                  <span className="bg-amber-900 text-amber-200 px-3 py-1 rounded-full font-semibold text-sm border border-amber-700">
+                    {getRegisteredReservesCount()}
+                  </span>
+                  {getReservesFriendsCount() > 0 && (
+                    <span className="bg-blue-900 text-blue-200 px-2 py-0.5 rounded-full text-xs border border-blue-700">
+                      +{getReservesFriendsCount()} amici
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-3">
               {isHistoricalMatch ? (
