@@ -2385,12 +2385,16 @@ export default function VolleyballApp() {
 
   const isUserParticipant = () => {
     if (!selectedMatch) return false;
-    return selectedMatch.participants?.some((p) => p.uid === currentUser?.uid);
+    const result = selectedMatch.participants?.some((p) => p.uid === currentUser?.uid);
+    console.log('🔍 isUserParticipant check:', result, 'currentUser.uid:', currentUser?.uid, 'participants:', selectedMatch.participants?.map(p => p.uid));
+    return result;
   };
 
   const isUserReserve = () => {
     if (!selectedMatch) return false;
-    return selectedMatch.reserves?.some((r) => r.uid === currentUser?.uid);
+    const result = selectedMatch.reserves?.some((r) => r.uid === currentUser?.uid);
+    console.log('🔍 isUserReserve check:', result, 'currentUser.uid:', currentUser?.uid, 'reserves:', selectedMatch.reserves?.map(r => r.uid));
+    return result;
   };
 
   // Non permettere iscrizione se non esiste una partita selezionata
