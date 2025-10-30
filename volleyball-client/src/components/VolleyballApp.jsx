@@ -287,20 +287,19 @@ export default function VolleyballApp() {
           // Aggiorna i dati delle partite attive
           setActiveMatches(matches);
           
-          // Solo al primo caricamento, imposta la vista appropriata
-          // DISABILITATO: questa logica causava cambi di vista indesiderati
-          // quando l'utente stava interagendo con la UI (es. aggiungendo amici)
-          if (false && isInitialLoad && currentView !== VIEW_STATES.MATCH_DETAIL) {
-            console.log('🔄 isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
+          // Solo al primo caricamento REALE dell'app, imposta la vista appropriata
+          // Ma NON durante gli aggiornamenti successivi causati da interazioni utente
+          if (isInitialLoad && currentView === VIEW_STATES.NO_MATCHES) {
+            console.log('🔄 PRIMO CARICAMENTO: isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
             if (matches.length > 0) {
-              console.log('📋 Cambiando vista a MATCH_LIST per initial load');
+              console.log('📋 Cambiando vista a MATCH_LIST per primo caricamento');
               setCurrentView(VIEW_STATES.MATCH_LIST);
             } else {
-              console.log('❌ Cambiando vista a NO_MATCHES per initial load');
-              setCurrentView(VIEW_STATES.NO_MATCHES);
+              console.log('❌ Rimanendo in NO_MATCHES per primo caricamento');
+              // currentView è già NO_MATCHES, non serve cambiare
             }
-            console.log('🏁 Impostando isInitialLoad=false');
-            setIsInitialLoad(false); // Non sarà più il primo caricamento
+            console.log('🏁 Disabling isInitialLoad dopo primo caricamento');
+            setIsInitialLoad(false);
           } else {
             console.log('🔄 onSnapshot aggiornamento: isInitialLoad=', isInitialLoad, 'matches.length=', matches.length, 'currentView=', currentView);
             // Imposta isInitialLoad=false alla prima esecuzione per evitare interferenze future
