@@ -2852,9 +2852,9 @@ export default function VolleyballApp() {
     }
   };
 
-  // Promuovi riserva a partecipante (solo admin)
+  // Promuovi riserva a partecipante
   const handlePromoteReserve = async (reserveUid) => {
-    if (!isAdmin || !selectedMatch) return;
+    if (!selectedMatch) return;
     
     try {
       const matchRef = doc(db, 'activeMatches', selectedMatch.id);
@@ -2899,6 +2899,49 @@ export default function VolleyballApp() {
     } catch (error) {
       console.error('Errore nella promozione:', error);
       alert(error.message || 'Errore nella promozione della riserva');
+    }
+  };
+
+  // Retrocedi partecipante a riserva
+  const handleDemoteParticipant = async (participantUid) => {
+    if (!selectedMatch) return;
+    
+    try {
+      const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(matchRef);
+        const data = snap.data() || { participants: [], reserves: [] };
+        
+        // Trova il partecipante da retrocedere
+        const participantIndex = data.participants?.findIndex((p) => p.uid === participantUid);
+        if (participantIndex === -1) {
+          throw new Error('Partecipante non trovato');
+        }
+        
+        const participantToDemote = data.participants[participantIndex];
+        
+        // Rimuovi dai partecipanti e aggiungi alle riserve
+        const newParticipants = [...(data.participants || [])];
+        newParticipants.splice(participantIndex, 1);
+        
+        const newReserves = [...(data.reserves || []), participantToDemote];
+        
+        transaction.update(matchRef, {
+          participants: newParticipants,
+          reserves: newReserves,
+          lastUpdated: serverTimestamp(),
+        });
+      });
+      
+      // Aggiorna le statistiche dell'utente retrocesso
+      if (currentUser && currentUser.uid === participantUid) {
+        await loadUserStats(currentUser.uid);
+      }
+      
+      alert('Partecipante spostato nelle riserve con successo!');
+    } catch (error) {
+      console.error('Errore nella retrocessione:', error);
+      alert(error.message || 'Errore nello spostamento alle riserve');
     }
   };
 
@@ -3210,13 +3253,13 @@ export default function VolleyballApp() {
         <h2 className="text-xl md:text-2xl font-bold text-gray-100 mb-4">Partite Attive</h2>
         
         {activeMatches.length > 0 ? (
-          <div className="space-y-3 md:space-y-4">
+          <div className="space-y-2">
             {activeMatches.map((match) => (
               <div 
                 key={match.id}
-                className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600 hover:border-indigo-500 transition group"
+                className="bg-gray-700 rounded-lg p-3 border border-gray-600 hover:border-indigo-500 transition group"
               >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3">
                   <div 
                     onClick={async () => {
                       setSelectedMatch(match);
@@ -3224,59 +3267,63 @@ export default function VolleyballApp() {
                       // Carica i set per questa partita
                       await loadMatchSets(match.id);
                     }}
-                    className="flex-1 cursor-pointer"
+                    className="flex-1 cursor-pointer min-w-0"
                   >
-                    <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
-                      {new Date(match.date).toLocaleString('it-IT', { 
-                        dateStyle: 'short', 
-                        timeStyle: 'short' 
-                      })}
-                    </h3>
-                    <p className="text-sm md:text-base text-gray-400 mt-1">
-                      Partita di Pallavolo
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
-                    <div className="text-center">
-                      <div className="text-lg md:text-2xl font-bold text-green-400">
-                        {(match.participants?.length || 0) + (match.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-gray-100 group-hover:text-indigo-300 truncate">
+                          {new Date(match.date).toLocaleString('it-IT', { 
+                            dateStyle: 'short', 
+                            timeStyle: 'short' 
+                          })}
+                        </h3>
                       </div>
-                      <div className="text-xs text-gray-400">Partecipanti</div>
+                      
+                      {/* Contatori compatti */}
+                      <div className="flex items-center gap-3 text-sm font-medium">
+                        <div className="flex items-center gap-1">
+                          <span className="text-green-400 font-bold">
+                            {(match.participants?.length || 0) + (match.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                          </span>
+                          <span className="text-gray-400 text-xs">partec.</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-amber-400 font-bold">
+                            {(match.reserves?.length || 0) + (match.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
+                          </span>
+                          <span className="text-gray-400 text-xs">riserve</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-lg md:text-2xl font-bold text-amber-400">
-                        {(match.reserves?.length || 0) + (match.reserves?.reduce((acc, r) => acc + (r.friends?.length || 0), 0) || 0)}
-                      </div>
-                      <div className="text-xs text-gray-400">Riserve</div>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Funzione per chiudere la partita (marcarla come giocata)
-                            handleCloseMatch(match);
-                          }}
-                          className="p-1 md:p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
-                          title="Chiudi partita (marca come giocata)"
-                        >
-                          <Calendar className="w-4 h-4 md:w-5 md:h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteActiveMatch(match.id);
-                          }}
-                          className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
-                          title="Elimina partita"
-                        >
-                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
                   </div>
+                  
+                  {/* Admin buttons */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseMatch(match);
+                        }}
+                        className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
+                        title="Chiudi partita (marca come giocata)"
+                      >
+                        <Calendar className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteActiveMatch(match.id);
+                        }}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                        title="Elimina partita"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -3665,6 +3712,15 @@ export default function VolleyballApp() {
                             >
                               📊
                             </button>
+                            {!isHistoricalMatch && (
+                              <button
+                                onClick={() => handleDemoteParticipant(participant.uid)}
+                                className="text-amber-400 hover:text-amber-300 text-xs px-2 py-1 rounded bg-amber-900/30 hover:bg-amber-900/50 transition"
+                                title="Sposta nelle riserve"
+                              >
+                                ↓
+                              </button>
+                            )}
                             {isAdmin && !isHistoricalMatch && (
                               <button
                                 onClick={() => handleAdminRemoveUser(participant.uid, false)}
@@ -3859,25 +3915,23 @@ export default function VolleyballApp() {
                                   📊
                                 </button>
                               )}
+                              {!reserve.isFriend && (
+                                <button
+                                  onClick={() => handlePromoteReserve(reserve.uid)}
+                                  className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                  title="Promuovi a partecipante"
+                                >
+                                  ↑
+                                </button>
+                              )}
                               {isAdmin && (
-                                <>
-                                  <button
-                                    onClick={() => handleAdminRemoveUser(reserve.uid, true)}
-                                    className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
-                                    title={reserve.isFriend ? "Rimuovi amico" : "Rimuovi utente"}
-                                  >
-                                    ✕
-                                  </button>
-                                  {!reserve.isFriend && (
-                                    <button
-                                      onClick={() => handlePromoteReserve(reserve.uid)}
-                                      className="text-green-400 hover:text-green-600 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
-                                      title="Promuovi a partecipante"
-                                    >
-                                      ↑
-                                    </button>
-                                  )}
-                                </>
+                                <button
+                                  onClick={() => handleAdminRemoveUser(reserve.uid, true)}
+                                  className="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 transition"
+                                  title={reserve.isFriend ? "Rimuovi amico" : "Rimuovi utente"}
+                                >
+                                  ✕
+                                </button>
                               )}
                             </div>
                           </div>
@@ -4085,106 +4139,105 @@ export default function VolleyballApp() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 md:space-y-4">
+              <div className="space-y-2">
                 {filteredMatches.map((session, index) => (
-              <div 
-                key={session.id}
-                className="bg-gray-700 rounded-lg p-3 md:p-4 border border-gray-600 hover:border-indigo-500 transition group"
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div 
-                    onClick={async () => {
-                      const matchData = {
-                        ...session,
-                        id: session.id,
-                        date: session.date.toDate ? session.date.toDate().toISOString() : new Date().toISOString()
-                      };
-                      setSelectedMatch(matchData);
-                      setCurrentView(VIEW_STATES.MATCH_DETAIL);
-                      // Carica i set per questa partita
-                      await loadMatchSets(matchData.id);
-                    }}
-                    className="flex-1 cursor-pointer"
-                  >
-                    <h3 className="text-base md:text-lg font-semibold text-gray-100 group-hover:text-indigo-300">
-                      {session.date?.toDate ? session.date.toDate().toLocaleDateString('it-IT', { 
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      }) : 'Partita'}
-                    </h3>
-                    <p className="text-sm md:text-base text-gray-400 mt-1">
-                      {session.date?.toDate ? session.date.toDate().toLocaleString('it-IT', { 
-                        dateStyle: 'short', 
-                        timeStyle: 'short' 
-                      }) : 'Data non disponibile'}
-                    </p>
-                    {session.ignoredFromStats && (
-                      <span className="inline-block mt-1 text-xs bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded">
-                        Ignorata dalle statistiche
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-end">
-                    <div className="text-center">
-                      <div className="text-lg md:text-2xl font-bold text-green-400">
-                        {(session.participants?.length || 0) + (session.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                    key={session.id}
+                    className="bg-gray-700 rounded-lg p-3 border border-gray-600 hover:border-indigo-500 transition group"
+                      >
+                    <div className="flex items-center justify-between gap-3">
+                      <div 
+                        onClick={async () => {
+                          const matchData = {
+                            ...session,
+                            id: session.id,
+                            date: session.date.toDate ? session.date.toDate().toISOString() : new Date().toISOString()
+                          };
+                          setSelectedMatch(matchData);
+                          setCurrentView(VIEW_STATES.MATCH_DETAIL);
+                          // Carica i set per questa partita
+                          await loadMatchSets(matchData.id);
+                        }}
+                        className="flex-1 cursor-pointer min-w-0"
+                          >
+                        <div className="flex items-center gap-3">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-sm font-semibold text-gray-100 group-hover:text-indigo-300 truncate">
+                              {session.date?.toDate ? session.date.toDate().toLocaleDateString('it-IT', { 
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              }) : 'Partita'}
+                              {session.ignoredFromStats && (
+                                <span className="ml-2 text-xs bg-yellow-900/50 text-yellow-300 px-1 py-0.5 rounded">
+                                  Ignorata
+                                </span>
+                              )}
+                            </h3>
+                          </div>
+                          
+                          {/* Contatori compatti */}
+                          <div className="flex items-center gap-3 text-sm font-medium">
+                            <div className="flex items-center gap-1">
+                              <span className="text-green-400 font-bold">
+                                {(session.participants?.length || 0) + (session.participants?.reduce((acc, p) => acc + (p.friends?.length || 0), 0) || 0)}
+                              </span>
+                              <span className="text-gray-400 text-xs">partec.</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-purple-400 font-bold">
+                                {session.setCount || 0}
+                              </span>
+                              <span className="text-gray-400 text-xs">set</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400">Partecipanti</div>
+                      {isAdmin && (
+                            <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReopenMatch(session);
+                            }}
+                            className="p-1 md:p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
+                            title="Riapri partita"
+                          >
+                            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleIgnoreSession(session.id);
+                            }}
+                            className={`p-1 md:p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20 rounded-lg transition ${
+                              session.ignoredFromStats ? 'bg-yellow-900/50' : ''
+                            }`}
+                            title={session.ignoredFromStats ? "Riattiva nelle statistiche" : "Ignora dalle statistiche"}
+                          >
+                            {session.ignoredFromStats ? '👁️' : '🙈'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSession(session.id);
+                            }}
+                            className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
+                            title="Elimina partita"
+                          >
+                            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <div className="text-lg md:text-2xl font-bold text-purple-400">
-                        {session.setCount || 0}
-                      </div>
-                      <div className="text-xs text-gray-400">Set</div>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReopenMatch(session);
-                          }}
-                          className="p-1 md:p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition"
-                          title="Riapri partita"
-                        >
-                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleIgnoreSession(session.id);
-                          }}
-                          className={`p-1 md:p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20 rounded-lg transition ${
-                            session.ignoredFromStats ? 'bg-yellow-900/50' : ''
-                          }`}
-                          title={session.ignoredFromStats ? "Riattiva nelle statistiche" : "Ignora dalle statistiche"}
-                        >
-                          {session.ignoredFromStats ? '👁️' : '🙈'}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteSession(session.id);
-                          }}
-                          className="p-1 md:p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition"
-                          title="Elimina partita"
-                        >
-                          <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-              </div>
-            );
+            )
           })()
         )}
       </div>
