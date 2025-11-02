@@ -291,8 +291,15 @@ export default function VolleyballApp() {
           // Ma NON durante gli aggiornamenti successivi causati da interazioni utente
           if (isInitialLoad && currentView === VIEW_STATES.NO_MATCHES) {
             console.log('🔄 PRIMO CARICAMENTO: isInitialLoad=true, matches.length=', matches.length, 'currentView=', currentView);
-            if (matches.length > 0) {
-              console.log('📋 Cambiando vista a MATCH_LIST per primo caricamento');
+            if (matches.length === 1) {
+              // Se c'è una sola partita attiva, aprila direttamente in MATCH_DETAIL
+              console.log('📋 Una sola partita attiva, aprendola direttamente in MATCH_DETAIL');
+              setSelectedMatch(matches[0]);
+              setCurrentView(VIEW_STATES.MATCH_DETAIL);
+              // Carica i set per questa partita
+              loadMatchSets(matches[0].id).catch(err => console.error('Errore caricamento set:', err));
+            } else if (matches.length > 1) {
+              console.log('📋 Più partite attive, mostrando MATCH_LIST');
               setCurrentView(VIEW_STATES.MATCH_LIST);
             } else {
               console.log('❌ Rimanendo in NO_MATCHES per primo caricamento');
