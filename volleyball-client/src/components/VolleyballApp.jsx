@@ -3705,13 +3705,15 @@ export default function VolleyballApp() {
                           <span className="font-medium text-gray-100">{participant.name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400">{participant.timestamp}</span>
-                            <button
-                              onClick={() => loadOtherUserStats(participant.uid, participant.name)}
-                              className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
-                              title="Visualizza statistiche"
-                            >
-                              📊
-                            </button>
+                            {!participant.isFriend && (
+                              <button
+                                onClick={() => loadOtherUserStats(participant.uid, participant.name)}
+                                className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                                title="Visualizza statistiche"
+                              >
+                                📊
+                              </button>
+                            )}
                             {!isHistoricalMatch && (
                               <button
                                 onClick={() => handleDemoteParticipant(participant.uid)}
@@ -3915,15 +3917,13 @@ export default function VolleyballApp() {
                                   📊
                                 </button>
                               )}
-                              {!reserve.isFriend && (
-                                <button
-                                  onClick={() => handlePromoteReserve(reserve.uid)}
-                                  className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
-                                  title="Promuovi a partecipante"
-                                >
-                                  ↑
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handlePromoteReserve(reserve.uid)}
+                                className="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-900/30 hover:bg-green-900/50 transition"
+                                title="Promuovi a partecipante"
+                              >
+                                ↑
+                              </button>
                               {isAdmin && (
                                 <button
                                   onClick={() => handleAdminRemoveUser(reserve.uid, true)}
