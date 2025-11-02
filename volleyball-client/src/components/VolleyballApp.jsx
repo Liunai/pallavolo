@@ -332,7 +332,16 @@ export default function VolleyballApp() {
     if (selectedMatch && activeMatches.length > 0) {
       const updatedMatch = activeMatches.find(match => match.id === selectedMatch.id);
       if (updatedMatch) {
+        console.log('🔄 Sincronizzazione selectedMatch:', {
+          oldParticipantsCount: selectedMatch.participants?.length || 0,
+          newParticipantsCount: updatedMatch.participants?.length || 0,
+          oldReservesCount: selectedMatch.reserves?.length || 0,
+          newReservesCount: updatedMatch.reserves?.length || 0,
+          currentView
+        });
         setSelectedMatch(updatedMatch);
+      } else {
+        console.warn('⚠️ selectedMatch non trovato in activeMatches, potrebbe essere stato eliminato');
       }
     }
   }, [activeMatches, selectedMatch?.id]);
