@@ -2575,13 +2575,30 @@ export default function VolleyballApp() {
       setFriends([]);
       await loadUserStats(currentUser.uid);
 
-      // I dati della partita si aggiorneranno automaticamente tramite onSnapshot,
-      // non è necessario ricaricarli manualmente qui
+      // Forza l'aggiornamento di selectedMatch dopo l'iscrizione per evitare problemi di sincronizzazione
+      console.log('🔄 Signup completato, forzando refresh della selectedMatch...');
+      
+      // Ricarica i dati aggiornati della partita corrente con un piccolo delay
+      setTimeout(async () => {
+        try {
+          const matchRef = doc(db, 'activeMatches', selectedMatch.id);
+          const updatedMatchSnap = await getDoc(matchRef);
+          if (updatedMatchSnap.exists()) {
+            const updatedMatchData = { id: updatedMatchSnap.id, ...updatedMatchSnap.data() };
+            setSelectedMatch(updatedMatchData);
+            console.log('✅ selectedMatch aggiornata con nuovi dati:', updatedMatchData);
+          } else {
+            console.warn('⚠️ Partita non trovata dopo signup');
+          }
+        } catch (error) {
+          console.error('❌ Errore nel refresh della selectedMatch:', error);
+        }
+      }, 500); // Delay per permettere la propagazione del database
 
       // Controlla se è stato aggiunto alle riserve invece che ai partecipanti
       const totalAfterSignup = getTotalCount();
-      if (!asReserve && totalAfterSignup > MAX_PARTICIPANTS) {
-        alert(`Lista partecipanti piena (${MAX_PARTICIPANTS} posti)! Sei stato aggiunto alle riserve.`);
+      if (!onlyFriends && !asReserve && totalAfterSignup > MAX_PARTICIPANTS) {
+        showToastMessage(`Lista partecipanti piena (${MAX_PARTICIPANTS} posti)! Sei stato aggiunto alle riserve.`);
       }
     } catch (e) {
       alert(e.message || 'Errore durante l\'iscrizione');
